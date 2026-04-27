@@ -1,0 +1,8 @@
+CREATE TABLE IF NOT EXISTS captures (
+  id TEXT PRIMARY KEY NOT NULL,
+  raw_text TEXT NOT NULL,
+  source TEXT NOT NULL DEFAULT 'web',
+  dimension TEXT,
+  status TEXT NOT NULL DEFAULT 'inbox',
+  created_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
