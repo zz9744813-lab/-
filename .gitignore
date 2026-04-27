@@ -219,3 +219,7 @@ __marimo__/
 
 # Local app database
 growth.db
+
+# Keep Next.js app source lib directory
+!compass/lib/
+!compass/lib/**
