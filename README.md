@@ -1,2 +1,108 @@
-# -
-个人成长管理系统
+# Compass × Hermes
+
+A local-first, design-forward personal growth dashboard whose brain is a self-hosted Hermes Agent.
+
+> **Architecture**: Compass is the body (data + UI), Hermes is the brain (reasoning + memory + scheduling), and they talk over MCP.
+
+---
+
+## Overview
+
+Compass is a single-user personal growth OS that runs on your own VPS. It tracks six dimensions of your life — goals, habits, mood, knowledge, finance, and time — and surfaces them through a fast, keyboard-first dashboard.
+
+What makes it different from Notion templates: it doesn't have its own AI brain. Instead, it integrates deeply with [Hermes Agent](https://github.com/NousResearch/hermes-agent) via MCP, so the same brain that talks to you on Telegram can read your Compass data, generate weekly reviews, and surface insights it learns over time.
+
+## Status
+
+🚧 Active development. See `compass-spec-v2.md` for the full product + technical specification.
+
+**Phase 1 shipped** (foundation):
+- Next.js App Router scaffold
+- Dark design tokens + Geist Sans / Fraunces / Geist Mono fonts
+- Sidebar layout + all six routes wired
+- Navigate-only Cmd+K palette
+- Quick capture with `C` shortcut writing to `captures` table
+- Inbox page listing captures
+
+**Next up — Phase 2** (Hermes integration):
+- HTTP client to Hermes
+- MCP server exposing Compass data
+- Quick Capture routed through Hermes for auto-classification
+- Brain page MVP (live chat with Hermes)
+
+## Stack
+
+```
+Framework:     Next.js 14 (App Router, RSC)
+Language:      TypeScript (strict)
+Styling:       Tailwind + CSS variables
+DB:            SQLite via better-sqlite3
+ORM:           Drizzle
+AI:            All inference goes through Hermes (no direct LLM SDK)
+MCP:           @modelcontextprotocol/sdk
+```
+
+## Run locally
+
+```bash
+cd compass
+pnpm install
+pnpm db:migrate
+pnpm dev      # opens at http://localhost:3001
+```
+
+## Deploy on VPS
+
+See `DEPLOY.md` for the full deployment guide. Short version:
+
+1. Hermes Agent already running on the VPS (port 8080, internal)
+2. Build Compass with `output: 'standalone'`:
+   ```bash
+   cd compass && pnpm build
+   ```
+3. Run via systemd (no Docker — saves ~150 MB on a 1 GB VPS):
+   ```bash
+   sudo systemctl enable --now compass
+   ```
+4. Expose via Tailscale (recommended) or Caddy + Basic Auth.
+
+Compass listens on **port 3001** to avoid conflict with other services.
+
+## Project structure
+
+```
+compass/
+├── app/
+│   ├── (app)/                    # authenticated app routes
+│   │   ├── dashboard/
+│   │   ├── goals/
+│   │   ├── habits/
+│   │   ├── journal/
+│   │   ├── knowledge/
+│   │   ├── finance/
+│   │   ├── brain/                # ★ Hermes view
+│   │   ├── reviews/
+│   │   └── inbox/
+│   └── api/
+│       ├── capture/              # POST: hand off to Hermes
+│       ├── hermes/webhook/       # POST: receive events from Hermes
+│       └── mcp/                  # MCP server endpoint
+├── components/
+│   ├── layout/sidebar.tsx
+│   ├── command/command-palette.tsx
+│   ├── capture/quick-capture.tsx
+│   └── ...
+├── lib/
+│   ├── db/schema.ts
+│   ├── hermes/client.ts          # HTTP client to Hermes
+│   └── mcp/                      # MCP tools
+└── drizzle/                      # migrations
+```
+
+## Legacy: Python + Streamlit prototype
+
+An earlier prototype using Python + Streamlit lives in the `legacy/` directory. It's preserved for reference but not maintained. Use Compass going forward.
+
+## License
+
+MIT
