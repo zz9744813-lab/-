@@ -1,3 +1,8 @@
+# Compass
+
+Next.js app for Compass × Hermes.
+
+## Local development
 # Compass × Hermes
 
 Phase 1 foundation scaffold for Compass personal growth OS.
@@ -10,6 +15,13 @@ pnpm db:migrate
 pnpm dev
 ```
 
+Default dev URL: `http://localhost:3001`
+
+## Notes
+
+- Compass is UI + local data body.
+- Hermes is the AI brain.
+- All AI flows must route through Hermes APIs/MCP.
 ## Phase 1 shipped
 
 - Next.js App Router scaffold
