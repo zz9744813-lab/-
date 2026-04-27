@@ -2,6 +2,5 @@
 const nextConfig = {
   output: "standalone",
 };
-const nextConfig = {};
 
 export default nextConfig;
