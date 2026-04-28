@@ -25,6 +25,11 @@ const config: Config = {
           muted: "var(--accent-muted)",
         },
       },
+      fontFamily: {
+        sans: ['var(--font-geist-sans)'],
+        mono: ['var(--font-geist-mono)'],
+        serif: ['var(--font-fraunces)'],
+      },
       borderRadius: {
         sm: "4px",
         md: "6px",

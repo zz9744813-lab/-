@@ -13,7 +13,7 @@ function startOfWeekDateString() {
   return monday.toISOString().slice(0, 10);
 }
 
-const CARD_STYLE = "rounded-lg border border-border bg-bg-surface p-6 hover:border-accent/60 transition-colors";
+const CARD_STYLE = "liquid-glass rounded-lg border border-border p-6 hover:border-accent/60 transition-colors animate-fade-rise";
 
 export default async function DashboardPage() {
   const today = new Date().toISOString().slice(0, 10);
