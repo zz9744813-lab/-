@@ -1,9 +1,10 @@
-import { desc } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getBrainStatus, sendBrainMessage } from "@/lib/brain/client";
+import { getCompassBrainContext } from "@/lib/brain/context";
 import { loadBrainConfigFromStore } from "@/lib/brain/settings-store";
 import { db } from "@/lib/db/client";
-import { hermesMessages } from "@/lib/db/schema";
+import { hermesMessages, insights } from "@/lib/db/schema";
 
 async function askBrain(formData: FormData) {
   "use server";
@@ -28,10 +29,93 @@ async function askBrain(formData: FormData) {
   revalidatePath("/brain");
 }
 
+async function runManualBrainAction(category: "daily_plan" | "weekly_review" | "language", title: string, prompt: string) {
+  const config = await loadBrainConfigFromStore();
+  const status = getBrainStatus(config);
+  const context = await getCompassBrainContext();
+
+  if (status.provider === "disabled") {
+    await db.insert(insights).values({
+      category,
+      title,
+      body: "请先在设置中配置大脑。",
+      evidence: JSON.stringify({ reason: "provider_disabled" }),
+      confidence: 0.7,
+    });
+    revalidatePath("/brain");
+    revalidatePath("/dashboard");
+    return;
+  }
+
+  const result = await sendBrainMessage(prompt, context, config);
+
+  await db.insert(insights).values({
+    category,
+    title,
+    body: result.ok ? result.response : `生成失败：${result.error ?? "未知错误"}`,
+    evidence: JSON.stringify(context),
+    confidence: 0.7,
+  });
+
+  revalidatePath("/brain");
+  revalidatePath("/dashboard");
+}
+
+async function generateDailyPlan() {
+  "use server";
+  const prompt = [
+    "你是 Compass 的个人成长大脑。请基于真实上下文生成今天最重要的 3 个行动。",
+    "要求：",
+    "- 不要泛泛而谈",
+    "- 每个行动必须可执行",
+    "- 优先考虑未完成习惯、活跃目标、收件箱待处理、最近日记",
+    "- 输出中文",
+    "- 格式：",
+    "  1. 今日最重要的事",
+    "  2. 三个行动",
+    "  3. 如果只能做一件事，做什么",
+  ].join("\n");
+
+  await runManualBrainAction("daily_plan", "今日行动计划", prompt);
+}
+
+async function generateWeeklyReview() {
+  "use server";
+  const prompt = [
+    "你是 Compass 的周复盘助手。请基于最近目标、习惯、日记、收件箱和洞察生成本周复盘。",
+    "要求：",
+    "- 总结本周状态",
+    "- 找出阻碍",
+    "- 给出下周建议",
+    "- 不要编造不存在的数据",
+    "- 输出中文",
+  ].join("\n");
+
+  await runManualBrainAction("weekly_review", "本周复盘", prompt);
+}
+
+async function generateLanguageAdvice() {
+  "use server";
+  const prompt = [
+    "你是 Compass 的语言学习教练。请基于 Duolingo 数据、日记和目标习惯生成建议。",
+    "要求：",
+    "- 如果没有 Duolingo 数据，明确提示尚未同步",
+    "- 如果有数据，分析 streak、7 天 XP、30 天 XP",
+    "- 给出下周学习计划",
+    "- 输出中文",
+  ].join("\n");
+
+  await runManualBrainAction("language", "语言学习建议", prompt);
+}
+
 export default async function BrainPage() {
   const config = await loadBrainConfigFromStore();
   const status = getBrainStatus(config);
   const messages = await db.select().from(hermesMessages).orderBy(desc(hermesMessages.createdAt)).limit(20);
+
+  const [latestDailyPlan] = await db.select().from(insights).where(eq(insights.category, "daily_plan")).orderBy(desc(insights.createdAt)).limit(1);
+  const [latestWeeklyReview] = await db.select().from(insights).where(eq(insights.category, "weekly_review")).orderBy(desc(insights.createdAt)).limit(1);
+  const [latestLanguageAdvice] = await db.select().from(insights).where(eq(insights.category, "language")).orderBy(desc(insights.createdAt)).limit(1);
 
   return (
     <section className="space-y-6">
@@ -46,7 +130,7 @@ export default async function BrainPage() {
 
       {status.provider === "disabled" ? (
         <article className="rounded-lg border border-border bg-bg-surface p-6 text-text-secondary">
-          大脑未接入，请前往设置配置。
+          大脑未接入，请先在设置中配置大脑。
         </article>
       ) : (
         <article className="rounded-lg border border-border bg-bg-surface p-6">
@@ -65,6 +149,36 @@ export default async function BrainPage() {
           ) : null}
         </article>
       )}
+
+      <article className="rounded-lg border border-border bg-bg-surface p-6">
+        <h2 className="text-lg font-semibold">Hermes 大脑动作</h2>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <form action={generateDailyPlan}>
+            <button type="submit" className="rounded-md border border-accent bg-accent-muted px-4 py-2 text-sm">生成今日行动计划</button>
+          </form>
+          <form action={generateWeeklyReview}>
+            <button type="submit" className="rounded-md border border-border px-4 py-2 text-sm">生成本周复盘</button>
+          </form>
+          <form action={generateLanguageAdvice}>
+            <button type="submit" className="rounded-md border border-border px-4 py-2 text-sm">生成语言学习建议</button>
+          </form>
+        </div>
+      </article>
+
+      <article className="rounded-lg border border-border bg-bg-surface p-6">
+        <h2 className="text-lg font-semibold">最新今日行动计划</h2>
+        <p className="mt-3 whitespace-pre-wrap text-sm text-text-secondary">{latestDailyPlan?.body ?? "尚未生成。"}</p>
+      </article>
+
+      <article className="rounded-lg border border-border bg-bg-surface p-6">
+        <h2 className="text-lg font-semibold">最新本周复盘</h2>
+        <p className="mt-3 whitespace-pre-wrap text-sm text-text-secondary">{latestWeeklyReview?.body ?? "尚未生成。"}</p>
+      </article>
+
+      <article className="rounded-lg border border-border bg-bg-surface p-6">
+        <h2 className="text-lg font-semibold">最新语言学习建议</h2>
+        <p className="mt-3 whitespace-pre-wrap text-sm text-text-secondary">{latestLanguageAdvice?.body ?? "尚未生成。"}</p>
+      </article>
 
       <article className="rounded-lg border border-border bg-bg-surface p-6">
         <h2 className="text-lg font-semibold">最近消息</h2>
