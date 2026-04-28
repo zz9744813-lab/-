@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Build output
+.next/
+out/
+build/
+
+# Type-check / build cache
+*.tsbuildinfo
+
+# Lockfiles (project uses pnpm; keep repo lockfile-agnostic for now)
+package-lock.json
+yarn.lock
+
+# Local env / data
+.env
+.env.local
+data/
+
+# Editor
+.DS_Store
