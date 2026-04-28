@@ -2,73 +2,93 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Google Fonts 用 link 引入（在 layout.tsx 里），这里只声明 fallback */
 :root {
-  /* 字体 —— 变量名沿用，值替换 */
   --font-geist-sans: 'Inter', 'Segoe UI', sans-serif;
   --font-geist-mono: 'JetBrains Mono', 'SFMono-Regular', monospace;
   --font-fraunces: 'Instrument Serif', Georgia, 'Times New Roman', serif;
 
-  /* 色板 —— 变量名沿用，值替换为深海军蓝主调 */
-  --bg-base: hsl(201 100% 13%);            /* 主背景 deep navy */
-  --bg-surface: hsl(201 60% 16%);          /* 卡片表面 */
-  --bg-elevated: hsl(201 50% 19%);         /* 浮起元素 */
+  --bg-base: hsl(215 50% 8%);
+  --bg-surface: hsl(215 35% 12%);
+  --bg-elevated: hsl(215 30% 16%);
 
-  --border-subtle: hsl(201 40% 22%);
-  --border-default: hsl(201 30% 28%);
-  --border-strong: hsl(201 25% 38%);
+  --border-subtle: hsla(0 0% 100% / 0.06);
+  --border-default: hsla(0 0% 100% / 0.10);
+  --border-strong: hsla(0 0% 100% / 0.18);
 
-  --text-primary: hsl(0 0% 100%);          /* 主文白 */
-  --text-secondary: hsl(240 4% 66%);       /* muted gray */
-  --text-tertiary: hsl(240 4% 46%);
+  --text-primary: hsl(0 0% 98%);
+  --text-secondary: hsl(220 8% 70%);
+  --text-tertiary: hsl(220 8% 50%);
 
-  /* 强调色保留暖色，与海军蓝形成对比 */
   --accent: #FF6B35;
-  --accent-muted: #FF6B3520;
+  --accent-muted: rgba(255, 107, 53, 0.14);
+  --accent-glow: rgba(255, 107, 53, 0.45);
 
   --success: #4ADE80;
   --warning: #FBBF24;
   --danger: #F87171;
 }
 
-body {
+html, body {
   background: var(--bg-base);
   color: var(--text-primary);
   font-family: var(--font-geist-sans);
   font-size: 14px;
-  line-height: 1.5;
+  line-height: 1.55;
+  min-height: 100vh;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 18% 22%, rgba(255, 107, 53, 0.18), transparent 45%),
+    radial-gradient(circle at 82% 78%, rgba(80, 140, 255, 0.18), transparent 50%),
+    radial-gradient(circle at 50% 110%, rgba(160, 100, 255, 0.14), transparent 55%);
+}
+
+body > * {
+  position: relative;
+  z-index: 1;
 }
 
 * {
   border-color: var(--border-default);
 }
 
-/* === Liquid Glass 工具类 === */
-.liquid-glass {
-  background: rgba(255, 255, 255, 0.01);
-  background-blend-mode: luminosity;
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  border: none;
-  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.1);
+/* === Liquid Glass === */
+.glass {
   position: relative;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.06) 0%,
+    rgba(255, 255, 255, 0.02) 100%
+  );
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border: 1px solid var(--border-default);
+  border-radius: 14px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.3),
+    0 8px 32px rgba(0, 0, 0, 0.35);
   overflow: hidden;
 }
 
-.liquid-glass::before {
+.glass::before {
   content: '';
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  padding: 1.4px;
+  padding: 1px;
   background: linear-gradient(
     180deg,
-    rgba(255, 255, 255, 0.45) 0%,
-    rgba(255, 255, 255, 0.15) 20%,
-    rgba(255, 255, 255, 0) 40%,
+    rgba(255, 255, 255, 0.35) 0%,
+    rgba(255, 255, 255, 0.05) 30%,
     rgba(255, 255, 255, 0) 60%,
-    rgba(255, 255, 255, 0.15) 80%,
-    rgba(255, 255, 255, 0.45) 100%
+    rgba(255, 255, 255, 0.10) 100%
   );
   -webkit-mask:
     linear-gradient(#fff 0 0) content-box,
@@ -78,11 +98,118 @@ body {
   pointer-events: none;
 }
 
-/* === Fade rise 入场动画 === */
+.glass-strong {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.10) 0%,
+    rgba(255, 255, 255, 0.04) 100%
+  );
+  backdrop-filter: blur(28px) saturate(160%);
+  -webkit-backdrop-filter: blur(28px) saturate(160%);
+}
+
+.glass-hover {
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.3s ease,
+              box-shadow 0.3s ease;
+}
+.glass-hover:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-strong);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 12px 40px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(255, 107, 53, 0.15);
+}
+
+.glass-input {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 10px 14px;
+  color: var(--text-primary);
+  transition: all 0.2s ease;
+  width: 100%;
+}
+.glass-input:focus {
+  outline: none;
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-muted);
+}
+.glass-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.glass-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 10px;
+  padding: 9px 16px;
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.glass-btn:hover {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.glass-btn-primary {
+  background: linear-gradient(135deg, var(--accent), #FF8855);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #fff;
+  box-shadow: 0 4px 14px var(--accent-glow);
+}
+.glass-btn-primary:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px var(--accent-glow);
+}
+
+.glass-btn-danger {
+  color: var(--danger);
+  border-color: rgba(248, 113, 113, 0.25);
+}
+.glass-btn-danger:hover {
+  background: rgba(248, 113, 113, 0.12);
+}
+
+/* legacy compat: keep old utility name working on older pages */
+.liquid-glass {
+  position: relative;
+  background: linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border: 1px solid var(--border-default);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.08),
+    0 8px 32px rgba(0,0,0,0.35);
+  overflow: hidden;
+}
+
 @keyframes fade-rise {
-  from { opacity: 0; transform: translateY(24px); }
+  from { opacity: 0; transform: translateY(20px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.animate-fade-rise         { animation: fade-rise 0.8s ease-out both; }
-.animate-fade-rise-delay   { animation: fade-rise 0.8s ease-out 0.2s both; }
-.animate-fade-rise-delay-2 { animation: fade-rise 0.8s ease-out 0.4s both; }
+.animate-fade-rise         { animation: fade-rise 0.6s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.animate-fade-rise-delay   { animation: fade-rise 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both; }
+.animate-fade-rise-delay-2 { animation: fade-rise 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both; }
+
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  box-shadow: 0 0 8px currentColor;
+}
+.status-dot-ok { background: var(--success); color: var(--success); }
+.status-dot-warn { background: var(--warning); color: var(--warning); }
+.status-dot-err { background: var(--danger); color: var(--danger); }
+.status-dot-off { background: var(--text-tertiary); color: var(--text-tertiary); box-shadow: none; }

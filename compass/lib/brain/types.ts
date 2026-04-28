@@ -1,12 +1,9 @@
-export type BrainProvider = "disabled" | "hermes-bridge" | "openai-compatible";
+export type BrainProvider = "disabled" | "hermes-bridge";
 
 export type BrainRuntimeConfig = {
   provider: BrainProvider;
   hermesBridgeUrl?: string;
   hermesBridgeToken?: string;
-  aiBaseUrl?: string;
-  aiApiKey?: string;
-  aiModel?: string;
 };
 
 export type BrainStatus = {

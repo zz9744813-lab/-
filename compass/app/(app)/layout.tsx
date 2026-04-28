@@ -4,10 +4,10 @@ import { QuickCapture } from "@/components/capture/quick-capture";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen bg-bg-base text-text-primary">
+    <div className="flex min-h-screen text-text-primary">
       <Sidebar />
-      <main className="w-full max-w-[1040px] p-8">
-        {children}
+      <main className="flex-1 p-10 overflow-x-hidden">
+        <div className="mx-auto max-w-[1080px]">{children}</div>
       </main>
       <CommandPalette />
       <QuickCapture />
