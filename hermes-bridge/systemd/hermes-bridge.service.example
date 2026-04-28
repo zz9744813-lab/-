@@ -4,14 +4,28 @@ After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=/opt/compass/hermes-bridge
+
+# IMPORTANT: bridge must run inside the Hermes Python environment so that
+# `from run_agent import AIAgent` resolves. Adjust these three paths to match
+# your install. Defaults below match a typical RackNerd/Ubuntu deploy where:
+#   - hermes-bridge code lives in /opt/dash-repo/hermes-bridge
+#   - Hermes Agent is installed at /root/.hermes/hermes-agent
+WorkingDirectory=/opt/dash-repo/hermes-bridge
+Environment=PYTHONPATH=/root/.hermes/hermes-agent
+ExecStart=/root/.hermes/hermes-agent/venv/bin/python -m uvicorn app:app --host 127.0.0.1 --port 8787
+
 Environment=HOST=127.0.0.1
 Environment=PORT=8787
-Environment=HERMES_BRIDGE_TOKEN=replace-me
-ExecStart=/usr/bin/python3 -m uvicorn app:app --host 127.0.0.1 --port 8787
+# Set this to a random secret if you want Compass to authenticate. Leave empty
+# to allow loopback calls without a token.
+Environment=HERMES_BRIDGE_TOKEN=
+Environment=HERMES_BRIDGE_TIMEOUT_SECONDS=60
+Environment=HERMES_BRIDGE_SKIP_MEMORY=false
+Environment=HERMES_BRIDGE_SKIP_CONTEXT_FILES=false
+
 Restart=on-failure
 RestartSec=3
-MemoryMax=350M
+MemoryMax=512M
 
 [Install]
 WantedBy=multi-user.target

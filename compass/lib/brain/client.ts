@@ -16,6 +16,44 @@ export function normalizeBrainConfig(raw?: Partial<BrainRuntimeConfig>): BrainRu
   };
 }
 
+export type BridgeHealth =
+  | { reachable: true; service: string; latencyMs: number }
+  | { reachable: false; reason: string };
+
+export async function probeBridgeHealth(configInput?: Partial<BrainRuntimeConfig>): Promise<BridgeHealth> {
+  const config = normalizeBrainConfig(configInput);
+  if (config.provider !== "hermes-bridge") {
+    return { reachable: false, reason: "未启用 hermes-bridge" };
+  }
+  if (!config.hermesBridgeUrl || config.hermesBridgeUrl.trim() === "") {
+    return { reachable: false, reason: "未配置 URL" };
+  }
+
+  const url = `${config.hermesBridgeUrl.replace(/\/$/, "")}/health`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5_000);
+  const startedAt = Date.now();
+
+  try {
+    const response = await fetch(url, { method: "GET", signal: controller.signal });
+    if (!response.ok) {
+      return { reachable: false, reason: `HTTP ${response.status}` };
+    }
+    const payload = (await response.json().catch(() => ({}))) as { ok?: boolean; service?: string };
+    if (!payload.ok) {
+      return { reachable: false, reason: "bridge 返回 ok=false" };
+    }
+    return { reachable: true, service: payload.service ?? "hermes-bridge", latencyMs: Date.now() - startedAt };
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      return { reachable: false, reason: "探测超时（5 秒）" };
+    }
+    return { reachable: false, reason: error instanceof Error ? error.message : "未知错误" };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export function getBrainStatus(configInput?: Partial<BrainRuntimeConfig>): BrainStatus {
   const config = normalizeBrainConfig(configInput);
 
