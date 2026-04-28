@@ -1,0 +1,88 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Google Fonts 用 link 引入（在 layout.tsx 里），这里只声明 fallback */
+:root {
+  /* 字体 —— 变量名沿用，值替换 */
+  --font-geist-sans: 'Inter', 'Segoe UI', sans-serif;
+  --font-geist-mono: 'JetBrains Mono', 'SFMono-Regular', monospace;
+  --font-fraunces: 'Instrument Serif', Georgia, 'Times New Roman', serif;
+
+  /* 色板 —— 变量名沿用，值替换为深海军蓝主调 */
+  --bg-base: hsl(201 100% 13%);            /* 主背景 deep navy */
+  --bg-surface: hsl(201 60% 16%);          /* 卡片表面 */
+  --bg-elevated: hsl(201 50% 19%);         /* 浮起元素 */
+
+  --border-subtle: hsl(201 40% 22%);
+  --border-default: hsl(201 30% 28%);
+  --border-strong: hsl(201 25% 38%);
+
+  --text-primary: hsl(0 0% 100%);          /* 主文白 */
+  --text-secondary: hsl(240 4% 66%);       /* muted gray */
+  --text-tertiary: hsl(240 4% 46%);
+
+  /* 强调色保留暖色，与海军蓝形成对比 */
+  --accent: #FF6B35;
+  --accent-muted: #FF6B3520;
+
+  --success: #4ADE80;
+  --warning: #FBBF24;
+  --danger: #F87171;
+}
+
+body {
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-geist-sans);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+* {
+  border-color: var(--border-default);
+}
+
+/* === Liquid Glass 工具类 === */
+.liquid-glass {
+  background: rgba(255, 255, 255, 0.01);
+  background-blend-mode: luminosity;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border: none;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+.liquid-glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.4px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.45) 0%,
+    rgba(255, 255, 255, 0.15) 20%,
+    rgba(255, 255, 255, 0) 40%,
+    rgba(255, 255, 255, 0) 60%,
+    rgba(255, 255, 255, 0.15) 80%,
+    rgba(255, 255, 255, 0.45) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* === Fade rise 入场动画 === */
+@keyframes fade-rise {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-rise         { animation: fade-rise 0.8s ease-out both; }
+.animate-fade-rise-delay   { animation: fade-rise 0.8s ease-out 0.2s both; }
+.animate-fade-rise-delay-2 { animation: fade-rise 0.8s ease-out 0.4s both; }

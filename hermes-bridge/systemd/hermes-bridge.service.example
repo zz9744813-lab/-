@@ -1,0 +1,17 @@
+[Unit]
+Description=Hermes Bridge for Compass
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/compass/hermes-bridge
+Environment=HOST=127.0.0.1
+Environment=PORT=8787
+Environment=HERMES_BRIDGE_TOKEN=replace-me
+ExecStart=/usr/bin/python3 -m uvicorn app:app --host 127.0.0.1 --port 8787
+Restart=on-failure
+RestartSec=3
+MemoryMax=350M
+
+[Install]
+WantedBy=multi-user.target

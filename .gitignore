@@ -216,3 +216,15 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Local app database
+growth.db
+
+# Keep Next.js app source lib directory
+!compass/lib/
+!compass/lib/**
+
+# Node / Next.js build artifacts
+compass/node_modules/
+compass/.next/
+compass/data/
