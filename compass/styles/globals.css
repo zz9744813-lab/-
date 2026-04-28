@@ -3,6 +3,9 @@
 @tailwind utilities;
 
 :root {
+  --font-geist-sans: "Inter", "Segoe UI", sans-serif;
+  --font-geist-mono: "JetBrains Mono", "SFMono-Regular", monospace;
+  --font-fraunces: "Georgia", "Times New Roman", serif;
   --bg-base: #0A0A0A;
   --bg-surface: #141414;
   --bg-elevated: #1A1A1A;

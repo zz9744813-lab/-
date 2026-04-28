@@ -5,14 +5,14 @@ import { usePathname } from "next/navigation";
 import { Brain, Goal, House, Inbox, NotebookPen, PiggyBank, ScrollText, Settings } from "lucide-react";
 
 const NAV_ITEMS = [
-  { href: "/dashboard", label: "Dashboard", icon: House },
-  { href: "/goals", label: "Goals", icon: Goal },
-  { href: "/habits", label: "Habits", icon: ScrollText },
-  { href: "/journal", label: "Journal", icon: NotebookPen },
-  { href: "/finance", label: "Finance", icon: PiggyBank },
-  { href: "/brain", label: "Brain", icon: Brain },
-  { href: "/inbox", label: "Inbox", icon: Inbox },
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/dashboard", label: "总览", icon: House },
+  { href: "/goals", label: "目标", icon: Goal },
+  { href: "/habits", label: "习惯", icon: ScrollText },
+  { href: "/journal", label: "日记", icon: NotebookPen },
+  { href: "/finance", label: "财务", icon: PiggyBank },
+  { href: "/brain", label: "大脑", icon: Brain },
+  { href: "/inbox", label: "收件箱", icon: Inbox },
+  { href: "/settings", label: "设置", icon: Settings },
 ];
 
 export function Sidebar() {

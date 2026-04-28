@@ -5,16 +5,16 @@ import { useRouter } from "next/navigation";
 import { Command } from "cmdk";
 
 const ITEMS = [
-  ["Dashboard", "/dashboard"],
-  ["Goals", "/goals"],
-  ["Habits", "/habits"],
-  ["Journal", "/journal"],
-  ["Knowledge", "/knowledge"],
-  ["Finance", "/finance"],
-  ["Brain", "/brain"],
-  ["Reviews", "/reviews"],
-  ["Inbox", "/inbox"],
-  ["Settings", "/settings"],
+  ["总览", "/dashboard"],
+  ["目标", "/goals"],
+  ["习惯", "/habits"],
+  ["日记", "/journal"],
+  ["知识", "/knowledge"],
+  ["财务", "/finance"],
+  ["大脑", "/brain"],
+  ["复盘", "/reviews"],
+  ["收件箱", "/inbox"],
+  ["设置", "/settings"],
 ] as const;
 
 export function CommandPalette() {
@@ -33,16 +33,14 @@ export function CommandPalette() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  if (!open) {
-    return null;
-  }
+  if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 p-4">
       <Command className="mx-auto mt-24 w-full max-w-2xl rounded-lg border border-border bg-bg-elevated p-2">
-        <Command.Input placeholder="Type a command..." className="mb-2 w-full bg-transparent p-3 outline-none" />
+        <Command.Input placeholder="输入命令或页面名..." className="mb-2 w-full bg-transparent p-3 outline-none" />
         <Command.List>
-          <Command.Group heading="Navigate">
+          <Command.Group heading="页面导航">
             {ITEMS.map(([label, href]) => (
               <Command.Item
                 key={href}

@@ -9,7 +9,7 @@ function assertHermesConfig() {
   }
 }
 
-function authHeaders() {
+function authHeaders(): Record<string, string> {
   return hermesToken ? { Authorization: `Bearer ${hermesToken}` } : {};
 }
 

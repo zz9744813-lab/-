@@ -1,183 +1,158 @@
-import type { BrainMessageResult, BrainProvider, BrainStatus } from "@/lib/brain/types";
+import type { BrainMessageResult, BrainProvider, BrainRuntimeConfig, BrainStatus } from "@/lib/brain/types";
 
-function getProvider(): BrainProvider {
-  const raw = (process.env.BRAIN_PROVIDER ?? "disabled").trim();
-  if (raw === "hermes-bridge" || raw === "openai-compatible" || raw === "disabled") return raw;
-  return "disabled";
+export function normalizeBrainConfig(raw?: Partial<BrainRuntimeConfig>): BrainRuntimeConfig {
+  const providerRaw = raw?.provider ?? (process.env.BRAIN_PROVIDER as BrainProvider | undefined) ?? "disabled";
+  const provider: BrainProvider =
+    providerRaw === "hermes-bridge" || providerRaw === "openai-compatible" || providerRaw === "disabled"
+      ? providerRaw
+      : "disabled";
+
+  return {
+    provider,
+    hermesBridgeUrl: raw?.hermesBridgeUrl ?? process.env.HERMES_BRIDGE_URL,
+    hermesBridgeToken: raw?.hermesBridgeToken ?? process.env.HERMES_BRIDGE_TOKEN,
+    aiBaseUrl: raw?.aiBaseUrl ?? process.env.AI_BASE_URL,
+    aiApiKey: raw?.aiApiKey ?? process.env.AI_API_KEY,
+    aiModel: raw?.aiModel ?? process.env.AI_MODEL,
+  };
 }
 
-export function getBrainStatus(): BrainStatus {
-  const provider = getProvider();
+export function getBrainStatus(configInput?: Partial<BrainRuntimeConfig>): BrainStatus {
+  const config = normalizeBrainConfig(configInput);
 
-  if (provider === "disabled") {
+  if (config.provider === "disabled") {
     return {
-      provider,
+      provider: config.provider,
       configured: true,
       missingVars: [],
       statusText: "大脑未接入，Compass 核心功能仍可使用",
     };
   }
 
-  if (provider === "hermes-bridge") {
-    const missingVars = process.env.HERMES_BRIDGE_URL ? [] : ["HERMES_BRIDGE_URL"];
+  if (config.provider === "hermes-bridge") {
+    const missingVars = config.hermesBridgeUrl ? [] : ["HERMES_BRIDGE_URL"];
     return {
-      provider,
+      provider: config.provider,
       configured: missingVars.length === 0,
       missingVars,
-      statusText:
-        missingVars.length === 0
-          ? "已配置 Hermes Bridge，可通过本地桥接访问 Hermes"
-          : "Hermes Bridge 配置不完整",
+      statusText: missingVars.length === 0 ? "已配置 Hermes Bridge，可使用大脑增强能力" : "Hermes Bridge 配置不完整",
     };
   }
 
-  const required = ["AI_BASE_URL", "AI_API_KEY", "AI_MODEL"] as const;
-  const missingVars = required.filter((key) => !process.env[key]);
+  const missingVars = [
+    !config.aiBaseUrl ? "AI_BASE_URL" : "",
+    !config.aiApiKey ? "AI_API_KEY" : "",
+    !config.aiModel ? "AI_MODEL" : "",
+  ].filter(Boolean);
 
   return {
-    provider,
+    provider: config.provider,
     configured: missingVars.length === 0,
     missingVars,
-    statusText:
-      missingVars.length === 0
-        ? "当前为直接模型模式，不经过 Hermes 记忆系统。"
-        : "OpenAI-compatible 配置不完整",
+    statusText: missingVars.length === 0 ? "当前为直接模型模式，不经过 Hermes 记忆系统。" : "OpenAI-compatible 配置不完整",
   };
 }
 
 export async function sendBrainMessage(
   message: string,
   context: Record<string, unknown> = {},
+  configInput?: Partial<BrainRuntimeConfig>,
 ): Promise<BrainMessageResult> {
-  const provider = getProvider();
-  const trimmed = message.trim();
+  const config = normalizeBrainConfig(configInput);
+  const text = message.trim();
 
-  if (!trimmed) {
-    return {
-      ok: false,
-      provider,
-      response: "",
-      error: "消息不能为空。",
-    };
+  if (!text) {
+    return { ok: false, provider: config.provider, response: "", error: "问题不能为空。" };
   }
 
-  if (provider === "disabled") {
+  if (config.provider === "disabled") {
     return {
       ok: true,
-      provider,
-      response: "当前未接入大脑。你可以配置 hermes-bridge 或 openai-compatible。",
+      provider: config.provider,
+      response: "当前未接入大脑。你可以在设置中配置 hermes-bridge 或 openai-compatible。",
     };
   }
 
-  if (provider === "hermes-bridge") {
-    const bridgeUrl = process.env.HERMES_BRIDGE_URL;
-    if (!bridgeUrl) {
-      return {
-        ok: false,
-        provider,
-        response: "",
-        error: "缺少 HERMES_BRIDGE_URL，无法连接 Hermes Bridge。",
-      };
+  if (config.provider === "hermes-bridge") {
+    if (!config.hermesBridgeUrl) {
+      return { ok: false, provider: config.provider, response: "", error: "缺少 HERMES_BRIDGE_URL。" };
     }
-
     try {
-      const response = await fetch(`${bridgeUrl.replace(/\/$/, "")}/chat`, {
+      const response = await fetch(`${config.hermesBridgeUrl.replace(/\/$/, "")}/chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(process.env.HERMES_BRIDGE_TOKEN
-            ? { Authorization: `Bearer ${process.env.HERMES_BRIDGE_TOKEN}` }
-            : {}),
+          ...(config.hermesBridgeToken ? { Authorization: `Bearer ${config.hermesBridgeToken}` } : {}),
         },
-        body: JSON.stringify({ message: trimmed, context }),
+        body: JSON.stringify({ message: text, context }),
       });
-
+      const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        const errorText = await response.text();
         return {
           ok: false,
-          provider,
+          provider: config.provider,
           response: "",
-          error: `Hermes Bridge 请求失败（${response.status}）：${errorText || "请检查 bridge 服务"}`,
+          error: payload?.detail || `Hermes Bridge 请求失败（${response.status}）`,
         };
       }
 
-      const data = (await response.json()) as { response?: string };
-      return {
-        ok: true,
-        provider,
-        response: data.response ?? "（Hermes Bridge 未返回文本）",
-      };
+      return { ok: true, provider: config.provider, response: payload.response ?? "（未返回内容）" };
     } catch (error) {
       return {
         ok: false,
-        provider,
+        provider: config.provider,
         response: "",
         error: `无法连接 Hermes Bridge：${error instanceof Error ? error.message : "未知错误"}`,
       };
     }
   }
 
-  const baseUrl = process.env.AI_BASE_URL;
-  const apiKey = process.env.AI_API_KEY;
-  const model = process.env.AI_MODEL;
-
-  if (!baseUrl || !apiKey || !model) {
+  if (!config.aiBaseUrl || !config.aiApiKey || !config.aiModel) {
     return {
       ok: false,
-      provider,
+      provider: config.provider,
       response: "",
-      error: "缺少 AI_BASE_URL / AI_API_KEY / AI_MODEL，无法使用 openai-compatible。",
+      error: "缺少 AI_BASE_URL / AI_API_KEY / AI_MODEL。",
     };
   }
 
   try {
-    const response = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
+    const response = await fetch(`${config.aiBaseUrl.replace(/\/$/, "")}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${config.aiApiKey}`,
       },
       body: JSON.stringify({
-        model,
+        model: config.aiModel,
         messages: [
-          {
-            role: "system",
-            content: "你是 Compass 的辅助大脑。请给出具体、可执行、简洁的建议。",
-          },
-          {
-            role: "user",
-            content: context && Object.keys(context).length > 0 ? `${trimmed}\n\ncontext: ${JSON.stringify(context)}` : trimmed,
-          },
+          { role: "system", content: "你是 Compass 的成长助理，请给出具体可执行建议。" },
+          { role: "user", content: `${text}\n\n上下文: ${JSON.stringify(context)}` },
         ],
       }),
     });
 
+    const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      const errorText = await response.text();
       return {
         ok: false,
-        provider,
+        provider: config.provider,
         response: "",
-        error: `OpenAI-compatible 请求失败（${response.status}）：${errorText || "未知错误"}`,
+        error: payload?.error?.message || `模型接口请求失败（${response.status}）`,
       };
     }
 
-    const data = (await response.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
-    };
-
     return {
       ok: true,
-      provider,
-      response: data.choices?.[0]?.message?.content?.trim() || "（模型未返回文本）",
+      provider: config.provider,
+      response: payload?.choices?.[0]?.message?.content?.trim() || "（模型未返回文本）",
     };
   } catch (error) {
     return {
       ok: false,
-      provider,
+      provider: config.provider,
       response: "",
-      error: `调用 openai-compatible 失败：${error instanceof Error ? error.message : "未知错误"}`,
+      error: `调用模型失败：${error instanceof Error ? error.message : "未知错误"}`,
     };
   }
 }

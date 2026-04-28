@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { and, count, desc, eq, gte } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { captures, goals, habitLogs, habits, insights, journalEntries, reviews } from "@/lib/db/schema";
@@ -12,17 +13,10 @@ function startOfWeekDateString() {
   return monday.toISOString().slice(0, 10);
 }
 
-function todayDateString() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function formatDate(dateValue?: Date | null) {
-  if (!dateValue) return "";
-  return dateValue.toISOString().slice(0, 10);
-}
+const CARD_STYLE = "rounded-lg border border-border bg-bg-surface p-6 hover:border-accent/60 transition-colors";
 
 export default async function DashboardPage() {
-  const today = todayDateString();
+  const today = new Date().toISOString().slice(0, 10);
   const weekStart = startOfWeekDateString();
 
   const [activeGoalsResult, activeHabitsResult, completedTodayResult, inboxResult, weeklyJournalResult] = await Promise.all([
@@ -40,54 +34,55 @@ export default async function DashboardPage() {
   const [latestReview] = await db.select().from(reviews).orderBy(desc(reviews.createdAt)).limit(1);
   const [latestInsight] = await db.select().from(insights).orderBy(desc(insights.createdAt)).limit(1);
 
-  const cards = [
-    {
-      label: "Active goals",
-      value: String(activeGoalsResult[0]?.value ?? 0),
-      helper: "Currently in progress",
-    },
-    {
-      label: "Today habits completed / total",
-      value: `${completedTodayResult[0]?.value ?? 0} / ${activeHabitsResult[0]?.value ?? 0}`,
-      helper: `For ${today}`,
-    },
-    {
-      label: "Inbox captures",
-      value: String(inboxResult[0]?.value ?? 0),
-      helper: "Status = inbox",
-    },
-    {
-      label: "Journal entries this week",
-      value: String(weeklyJournalResult[0]?.value ?? 0),
-      helper: `Since ${weekStart}`,
-    },
-    {
-      label: "Latest review",
-      value: latestReview ? latestReview.title : "No review yet",
-      helper: latestReview ? `${latestReview.period} · ${formatDate(latestReview.createdAt)}` : "Generate your first weekly review",
-    },
-    {
-      label: "Latest insight",
-      value: latestInsight ? latestInsight.title : "No insight yet",
-      helper: latestInsight ? `${latestInsight.category} · ${formatDate(latestInsight.createdAt)}` : "Hermes will write insights here",
-    },
-  ];
+  const activeGoals = activeGoalsResult[0]?.value ?? 0;
+  const habitTotal = activeHabitsResult[0]?.value ?? 0;
+  const habitDone = completedTodayResult[0]?.value ?? 0;
+  const inboxCount = inboxResult[0]?.value ?? 0;
+  const weekJournal = weeklyJournalResult[0]?.value ?? 0;
 
   return (
     <section className="space-y-6">
-      <p className="text-sm text-text-secondary">Dashboard</p>
+      <p className="text-sm text-text-secondary">今天也在持续成长</p>
       <h1 className="text-4xl" style={{ fontFamily: "var(--font-fraunces)" }}>
-        Your growth at a glance
+        成长总览
       </h1>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {cards.map((card) => (
-          <article key={card.label} className="rounded-lg border border-border bg-bg-surface p-6">
-            <p className="text-xs text-text-secondary">{card.label}</p>
-            <p className="mt-2 break-words font-mono text-2xl text-text-primary">{card.value}</p>
-            <p className="mt-2 text-xs text-text-secondary">{card.helper}</p>
-          </article>
-        ))}
+        <Link href="/goals" className={CARD_STYLE}>
+          <p className="text-xs text-text-secondary">活跃目标</p>
+          <p className="mt-2 font-mono text-2xl">{activeGoals}</p>
+          <p className="mt-2 text-xs text-text-secondary">{activeGoals === 0 ? "还没有进行中的目标，去创建一个。" : "点击查看并管理目标"}</p>
+        </Link>
+
+        <Link href="/habits" className={CARD_STYLE}>
+          <p className="text-xs text-text-secondary">今日习惯</p>
+          <p className="mt-2 font-mono text-2xl">{habitDone} / {habitTotal}</p>
+          <p className="mt-2 text-xs text-text-secondary">{habitTotal === 0 ? "还没有习惯，去添加一个日常动作。" : "点击去打卡或调整习惯"}</p>
+        </Link>
+
+        <Link href="/inbox" className={CARD_STYLE}>
+          <p className="text-xs text-text-secondary">收件箱待处理</p>
+          <p className="mt-2 font-mono text-2xl">{inboxCount}</p>
+          <p className="mt-2 text-xs text-text-secondary">{inboxCount === 0 ? "收件箱为空，想法可以先快速记录。" : "点击清理和处理收集项"}</p>
+        </Link>
+
+        <Link href="/journal" className={CARD_STYLE}>
+          <p className="text-xs text-text-secondary">本周日记</p>
+          <p className="mt-2 font-mono text-2xl">{weekJournal}</p>
+          <p className="mt-2 text-xs text-text-secondary">{weekJournal === 0 ? "这周还没写日记，去记录今天。" : "点击继续记录和复盘"}</p>
+        </Link>
+
+        <Link href={latestReview ? "/journal" : "/journal"} className={CARD_STYLE}>
+          <p className="text-xs text-text-secondary">最新复盘</p>
+          <p className="mt-2 line-clamp-2 text-sm">{latestReview ? latestReview.title : "暂无复盘"}</p>
+          <p className="mt-2 text-xs text-text-secondary">{latestReview ? "点击查看相关记录" : "去日记页写下本周复盘"}</p>
+        </Link>
+
+        <Link href="/brain" className={CARD_STYLE}>
+          <p className="text-xs text-text-secondary">最新洞察</p>
+          <p className="mt-2 line-clamp-2 text-sm">{latestInsight ? latestInsight.title : "暂无洞察"}</p>
+          <p className="mt-2 text-xs text-text-secondary">{latestInsight ? "点击进入大脑查看更多" : "去大脑页面测试连接并获取建议"}</p>
+        </Link>
       </div>
     </section>
   );

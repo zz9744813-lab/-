@@ -49,7 +49,7 @@ export function QuickCapture() {
     <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-bg-surface p-6">
       <form onSubmit={onSubmit} className="mx-auto max-w-4xl space-y-3">
         <label htmlFor="quick-capture" className="text-sm text-text-secondary">
-          Quick Capture · Press Enter to save
+          快速记录 · 回车保存
         </label>
         <textarea
           id="quick-capture"
@@ -57,12 +57,12 @@ export function QuickCapture() {
           onChange={(event) => setValue(event.target.value)}
           rows={3}
           className="w-full rounded-md border border-border bg-bg-elevated p-4 outline-none focus:border-accent"
-          placeholder="Capture a thought, task, or reflection..."
+          placeholder="记录一个想法、任务或反思..."
         />
         <div className="text-xs text-text-secondary">
-          {status === "saving" && "Saving..."}
-          {status === "saved" && "Saved to inbox."}
-          {status === "error" && "Save failed."}
+          {status === "saving" && "保存中..."}
+          {status === "saved" && "已保存到收件箱。"}
+          {status === "error" && "保存失败，请稍后重试。"}
         </div>
       </form>
     </div>

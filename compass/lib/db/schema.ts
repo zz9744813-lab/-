@@ -42,6 +42,7 @@ export const habitLogs = sqliteTable("habit_logs", {
 
 export const journalEntries = sqliteTable("journal_entries", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  title: text("title"),
   date: text("date").notNull(),
   mood: integer("mood"),
   content: text("content").notNull(),
@@ -67,6 +68,16 @@ export const financeSnapshots = sqliteTable("finance_snapshots", {
   investments: real("investments").notNull().default(0),
   debt: real("debt").notNull().default(0),
   note: text("note"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const financeTransactions = sqliteTable("finance_transactions", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  type: text("type").notNull(),
+  amount: real("amount").notNull().default(0),
+  category: text("category"),
+  note: text("note"),
+  date: text("date").notNull(),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
@@ -109,4 +120,10 @@ export const skillsCache = sqliteTable("skills_cache", {
   useCount: integer("use_count").notNull().default(0),
   createdAt: integer("created_at", { mode: "timestamp" }),
   syncedAt: integer("synced_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const appSettings = sqliteTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: text("value"),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
 });
