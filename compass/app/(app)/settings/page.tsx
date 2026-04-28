@@ -1,5 +1,7 @@
 import { revalidatePath } from "next/cache";
-import { getBrainStatus, sendBrainMessage } from "@/lib/brain/client";
+import { getBrainStatus, probeBridgeHealth, sendBrainMessage } from "@/lib/brain/client";
+
+export const dynamic = "force-dynamic";
 import {
   loadBrainConfigFromStore,
   loadBrainTestResult,
@@ -62,13 +64,22 @@ export default async function SettingsPage() {
   const status = getBrainStatus(stored);
   const testResult = await loadBrainTestResult();
   const duoConfig = await loadDuolingoConfig();
+  const health = await probeBridgeHealth(stored);
 
-  const dotClass =
-    status.provider === "disabled"
-      ? "status-dot status-dot-off"
-      : status.configured
-      ? "status-dot status-dot-ok"
-      : "status-dot status-dot-warn";
+  let dotClass = "status-dot status-dot-off";
+  let liveLabel = "未接入";
+  if (status.provider === "hermes-bridge") {
+    if (!status.configured) {
+      dotClass = "status-dot status-dot-warn";
+      liveLabel = "配置不完整";
+    } else if (health.reachable) {
+      dotClass = "status-dot status-dot-ok";
+      liveLabel = `已连接 · ${health.latencyMs}ms`;
+    } else {
+      dotClass = "status-dot status-dot-err";
+      liveLabel = `不可达 · ${health.reason}`;
+    }
+  }
 
   return (
     <section className="space-y-6 max-w-3xl">
@@ -84,7 +95,7 @@ export default async function SettingsPage() {
           <h2 className="text-lg font-semibold">Hermes 大脑</h2>
           <span className="text-xs text-text-secondary inline-flex items-center">
             <span className={dotClass} />
-            {status.provider === "disabled" ? "未接入" : status.configured ? "已连接" : "配置不完整"}
+            {liveLabel}
           </span>
         </div>
         <p className="text-xs text-text-secondary mb-5">
