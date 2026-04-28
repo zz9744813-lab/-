@@ -19,28 +19,56 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-[240px] border-r border-border bg-bg-surface p-6">
-      <div className="mb-8 text-xl font-semibold">Compass</div>
-      <nav className="space-y-2">
-        {NAV_ITEMS.map((item) => {
-          const Icon = item.icon;
-          const active = pathname === item.href;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex items-center gap-3 rounded-md border px-3 py-2 text-sm transition-all duration-200 ease-expo ${
-                active
-                  ? "border-accent bg-accent-muted text-text-primary"
-                  : "border-transparent text-text-secondary hover:border-border hover:bg-bg-elevated"
-              }`}
-            >
-              <Icon size={18} strokeWidth={1.5} />
-              {item.label}
-            </Link>
-          );
-        })}
-      </nav>
+    <aside className="w-[240px] p-5 sticky top-0 h-screen">
+      <div className="glass h-full p-5 flex flex-col">
+        <div className="mb-8 flex items-center gap-2 px-1">
+          <div
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold"
+            style={{
+              background: "linear-gradient(135deg, var(--accent), #FF8855)",
+              boxShadow: "0 4px 14px var(--accent-glow)",
+            }}
+          >
+            C
+          </div>
+          <span className="text-lg font-semibold tracking-tight">Compass</span>
+        </div>
+
+        <nav className="space-y-1 flex-1">
+          {NAV_ITEMS.map((item) => {
+            const Icon = item.icon;
+            const active = pathname === item.href;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all duration-300 ${
+                  active
+                    ? "text-text-primary"
+                    : "text-text-secondary hover:text-text-primary hover:bg-white/5"
+                }`}
+                style={
+                  active
+                    ? {
+                        background:
+                          "linear-gradient(135deg, rgba(255,107,53,0.18), rgba(255,107,53,0.06))",
+                        border: "1px solid rgba(255,107,53,0.25)",
+                        boxShadow: "0 0 14px rgba(255,107,53,0.18)",
+                      }
+                    : { border: "1px solid transparent" }
+                }
+              >
+                <Icon size={17} strokeWidth={1.6} />
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div className="text-[11px] text-text-tertiary px-1 pt-4 border-t border-border-subtle">
+          ⌘K 命令 · C 速记
+        </div>
+      </div>
     </aside>
   );
 }

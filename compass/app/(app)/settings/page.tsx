@@ -16,16 +16,11 @@ import { runDuolingoSync } from "@/lib/duolingo/sync";
 
 async function saveSettings(formData: FormData) {
   "use server";
-
   await saveBrainConfigToStore({
-    provider: String(formData.get("provider") ?? "disabled") as "disabled" | "hermes-bridge" | "openai-compatible",
-    hermesBridgeUrl: String(formData.get("hermesBridgeUrl") ?? "internal").trim() || "internal",
+    provider: String(formData.get("provider") ?? "disabled") as "disabled" | "hermes-bridge",
+    hermesBridgeUrl: String(formData.get("hermesBridgeUrl") ?? "").trim(),
     hermesBridgeToken: String(formData.get("hermesBridgeToken") ?? ""),
-    aiBaseUrl: String(formData.get("aiBaseUrl") ?? ""),
-    aiApiKey: String(formData.get("aiApiKey") ?? ""),
-    aiModel: String(formData.get("aiModel") ?? ""),
   });
-
   await saveBrainTestResult("配置已保存。");
   revalidatePath("/settings");
   revalidatePath("/brain");
@@ -33,36 +28,25 @@ async function saveSettings(formData: FormData) {
 
 async function testConnection(formData: FormData) {
   "use server";
-
   const config = {
-    provider: String(formData.get("provider") ?? "disabled") as "disabled" | "hermes-bridge" | "openai-compatible",
-    hermesBridgeUrl: String(formData.get("hermesBridgeUrl") ?? "internal").trim() || "internal",
+    provider: String(formData.get("provider") ?? "disabled") as "disabled" | "hermes-bridge",
+    hermesBridgeUrl: String(formData.get("hermesBridgeUrl") ?? "").trim(),
     hermesBridgeToken: String(formData.get("hermesBridgeToken") ?? ""),
-    aiBaseUrl: String(formData.get("aiBaseUrl") ?? ""),
-    aiApiKey: String(formData.get("aiApiKey") ?? ""),
-    aiModel: String(formData.get("aiModel") ?? ""),
   };
 
-  const result = await sendBrainMessage("这是连接测试，请回复“连接成功”。", { from: "settings-test" }, config);
-  if (result.ok && result.response.includes("内部桥接可用，但尚未连接 Hermes Agent 或模型")) {
-    await saveBrainTestResult("内部桥接可用，但尚未连接 Hermes Agent 或模型。");
-  } else {
-    await saveBrainTestResult(result.ok ? `测试成功：${result.response}` : `测试失败：${result.error ?? "未知错误"}`);
-  }
-
+  const result = await sendBrainMessage("连接测试，请回复“连接成功”。", { from: "settings-test" }, config);
+  await saveBrainTestResult(result.ok ? `测试成功：${result.response}` : `测试失败：${result.error ?? "未知错误"}`);
   revalidatePath("/settings");
 }
 
 async function saveDuolingoSettings(formData: FormData) {
   "use server";
-
   await saveDuolingoConfig({
     jwt: String(formData.get("duolingoJwt") ?? ""),
     userId: String(formData.get("duolingoUserId") ?? ""),
     username: String(formData.get("duolingoUsername") ?? ""),
     syncSecret: String(formData.get("duolingoSyncSecret") ?? ""),
   });
-
   revalidatePath("/settings");
 }
 
@@ -79,95 +63,119 @@ export default async function SettingsPage() {
   const testResult = await loadBrainTestResult();
   const duoConfig = await loadDuolingoConfig();
 
+  const dotClass =
+    status.provider === "disabled"
+      ? "status-dot status-dot-off"
+      : status.configured
+      ? "status-dot status-dot-ok"
+      : "status-dot status-dot-warn";
+
   return (
-    <section className="space-y-6">
-      <h1 className="text-3xl font-semibold">设置</h1>
+    <section className="space-y-6 max-w-3xl">
+      <div className="animate-fade-rise">
+        <p className="text-sm text-text-secondary">配置 Hermes 大脑与外部数据源</p>
+        <h1 className="text-4xl mt-1" style={{ fontFamily: "var(--font-fraunces)" }}>
+          设置
+        </h1>
+      </div>
 
-      <article className="rounded-lg border border-border bg-bg-surface p-6">
-        <h2 className="text-lg font-semibold">大脑配置</h2>
-        <form className="mt-4 space-y-3">
-          <div className="grid gap-3 md:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-sm text-text-secondary">AI 模式</label>
-              <select name="provider" defaultValue={stored.provider ?? "disabled"} className="w-full rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm">
-                <option value="disabled">disabled</option>
-                <option value="hermes-bridge">hermes-bridge</option>
-                <option value="openai-compatible">openai-compatible</option>
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-sm text-text-secondary">Hermes Bridge URL</label>
-              <input name="hermesBridgeUrl" defaultValue={stored.hermesBridgeUrl ?? "internal"} placeholder="internal 或 http://127.0.0.1:8787" className="w-full rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm" />
-              <p className="mt-1 text-xs text-text-secondary">internal：使用 Compass 内置桥接；URL：使用外部 Hermes Bridge 服务。</p>
-            </div>
-            <div>
-              <label className="mb-1 block text-sm text-text-secondary">AI Base URL</label>
-              <input name="aiBaseUrl" defaultValue={stored.aiBaseUrl ?? ""} placeholder="https://api.openai.com/v1" className="w-full rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm" />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm text-text-secondary">AI Model</label>
-              <input name="aiModel" defaultValue={stored.aiModel ?? ""} placeholder="gpt-4o-mini / deepseek-chat" className="w-full rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm" />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm text-text-secondary">Hermes Bridge Token</label>
-              <input type="password" name="hermesBridgeToken" defaultValue={stored.hermesBridgeToken ?? ""} className="w-full rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm" />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm text-text-secondary">API Key</label>
-              <input type="password" name="aiApiKey" defaultValue={stored.aiApiKey ?? ""} className="w-full rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm" />
-            </div>
+      <article className="glass glass-hover p-7 animate-fade-rise-delay">
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="text-lg font-semibold">Hermes 大脑</h2>
+          <span className="text-xs text-text-secondary inline-flex items-center">
+            <span className={dotClass} />
+            {status.provider === "disabled" ? "未接入" : status.configured ? "已连接" : "配置不完整"}
+          </span>
+        </div>
+        <p className="text-xs text-text-secondary mb-5">
+          Compass 把所有 AI 能力委托给 Hermes。模型（DeepSeek/OpenRouter 等）、API Key、Memory 都由 Hermes 管理，这里只填桥接地址。
+        </p>
+
+        <form className="space-y-4">
+          <div>
+            <label className="mb-1.5 block text-xs text-text-secondary">大脑模式</label>
+            <select name="provider" defaultValue={stored.provider ?? "hermes-bridge"} className="glass-input">
+              <option value="hermes-bridge">hermes-bridge（接入 Hermes）</option>
+              <option value="disabled">disabled（离线，核心功能可用）</option>
+            </select>
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            <button formAction={saveSettings} className="rounded-md border border-accent bg-accent-muted px-4 py-2 text-sm">保存</button>
-            <button formAction={testConnection} className="rounded-md border border-border px-4 py-2 text-sm">测试连接</button>
-          </div>
-        </form>
-      </article>
-
-      <article className="rounded-lg border border-border bg-bg-surface p-6 text-sm text-text-secondary">
-        <p>当前模式：{status.provider}</p>
-        <p>配置状态：{status.configured ? "已配置" : "配置不完整"}</p>
-        {status.missingVars.length > 0 ? <p>缺失字段：{status.missingVars.join("、")}</p> : null}
-        <p>Hermes Token：{maskBrainSecret(stored.hermesBridgeToken)}</p>
-        <p>AI Key：{maskBrainSecret(stored.aiApiKey)}</p>
-        <p className="mt-2">{status.statusText}</p>
-        {testResult ? <p className="mt-2">连接测试：{testResult}</p> : null}
-      </article>
-
-      <article className="rounded-lg border border-border bg-bg-surface p-6">
-        <h2 className="text-lg font-semibold">Duolingo 同步</h2>
-        <form className="mt-4 space-y-3">
-          <div className="grid gap-3 md:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-sm text-text-secondary">JWT</label>
-              <input type="password" name="duolingoJwt" defaultValue={duoConfig.jwt ?? ""} className="w-full rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm" />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm text-text-secondary">User ID</label>
-              <input name="duolingoUserId" defaultValue={duoConfig.userId ?? ""} className="w-full rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm" />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm text-text-secondary">用户名（可选）</label>
-              <input name="duolingoUsername" defaultValue={duoConfig.username ?? ""} className="w-full rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm" />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm text-text-secondary">Sync Secret</label>
-              <input type="password" name="duolingoSyncSecret" defaultValue={duoConfig.syncSecret ?? ""} className="w-full rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm" />
-            </div>
+          <div>
+            <label className="mb-1.5 block text-xs text-text-secondary">Hermes Bridge URL</label>
+            <input
+              name="hermesBridgeUrl"
+              defaultValue={stored.hermesBridgeUrl ?? "http://127.0.0.1:8787"}
+              placeholder="http://127.0.0.1:8787"
+              className="glass-input font-mono text-xs"
+            />
+            <p className="mt-1.5 text-xs text-text-tertiary">
+              指向你的 hermes-bridge FastAPI 服务地址。Compass 会把对话转发到这里，由 Hermes 处理。
+            </p>
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            <button formAction={saveDuolingoSettings} className="rounded-md border border-accent bg-accent-muted px-4 py-2 text-sm">保存 Duolingo 配置</button>
-            <button formAction={triggerDuolingoSync} className="rounded-md border border-border px-4 py-2 text-sm">立即同步</button>
+          <div>
+            <label className="mb-1.5 block text-xs text-text-secondary">Hermes Bridge Token（可选）</label>
+            <input
+              type="password"
+              name="hermesBridgeToken"
+              defaultValue={stored.hermesBridgeToken ?? ""}
+              placeholder="若 hermes-bridge 配置了鉴权则填写"
+              className="glass-input font-mono text-xs"
+            />
+          </div>
+
+          <div className="flex flex-wrap gap-2 pt-2">
+            <button formAction={saveSettings} className="glass-btn glass-btn-primary">保存配置</button>
+            <button formAction={testConnection} className="glass-btn">测试连接</button>
           </div>
         </form>
 
-        <div className="mt-4 space-y-1 text-sm text-text-secondary">
-          <p>最近同步时间：{duoConfig.lastSyncAt || "尚未同步"}</p>
-          <p>最近同步状态：{duoConfig.lastSyncStatus || "未知"}</p>
-          <p>JWT：{maskDuolingoSecret(duoConfig.jwt)}</p>
-          <p>Sync Secret：{maskDuolingoSecret(duoConfig.syncSecret)}</p>
+        <div className="mt-5 pt-5 border-t border-border-subtle space-y-1 text-xs text-text-secondary">
+          <p>当前模式 · <span className="text-text-primary">{status.provider}</span></p>
+          <p>Bridge Token · <span className="font-mono">{maskBrainSecret(stored.hermesBridgeToken)}</span></p>
+          {status.missingVars.length > 0 && (
+            <p style={{ color: "var(--warning)" }}>缺失字段：{status.missingVars.join("、")}</p>
+          )}
+          <p className="mt-2">{status.statusText}</p>
+          {testResult && <p className="mt-1 text-text-primary">↳ {testResult}</p>}
+        </div>
+      </article>
+
+      <article className="glass glass-hover p-7 animate-fade-rise-delay-2">
+        <h2 className="text-lg font-semibold mb-1">Duolingo 同步</h2>
+        <p className="text-xs text-text-secondary mb-5">将每日 XP / streak 同步进 Compass，作为 Hermes 的语言学习上下文。</p>
+
+        <form className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <label className="mb-1.5 block text-xs text-text-secondary">JWT</label>
+              <input type="password" name="duolingoJwt" defaultValue={duoConfig.jwt ?? ""} className="glass-input font-mono text-xs" />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs text-text-secondary">User ID</label>
+              <input name="duolingoUserId" defaultValue={duoConfig.userId ?? ""} className="glass-input font-mono text-xs" />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs text-text-secondary">用户名（可选）</label>
+              <input name="duolingoUsername" defaultValue={duoConfig.username ?? ""} className="glass-input" />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs text-text-secondary">Sync Secret</label>
+              <input type="password" name="duolingoSyncSecret" defaultValue={duoConfig.syncSecret ?? ""} className="glass-input font-mono text-xs" />
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2 pt-2">
+            <button formAction={saveDuolingoSettings} className="glass-btn glass-btn-primary">保存</button>
+            <button formAction={triggerDuolingoSync} className="glass-btn">立即同步</button>
+          </div>
+        </form>
+
+        <div className="mt-5 pt-5 border-t border-border-subtle grid gap-1 text-xs text-text-secondary md:grid-cols-2">
+          <p>最近同步 · <span className="text-text-primary">{duoConfig.lastSyncAt || "尚未同步"}</span></p>
+          <p>状态 · <span className="text-text-primary">{duoConfig.lastSyncStatus || "未知"}</span></p>
+          <p>JWT · <span className="font-mono">{maskDuolingoSecret(duoConfig.jwt)}</span></p>
+          <p>Sync Secret · <span className="font-mono">{maskDuolingoSecret(duoConfig.syncSecret)}</span></p>
         </div>
       </article>
     </section>

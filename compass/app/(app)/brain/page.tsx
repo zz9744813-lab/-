@@ -1,6 +1,6 @@
 import { desc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { getBrainStatus, normalizeBrainConfig, sendBrainMessage } from "@/lib/brain/client";
+import { getBrainStatus, sendBrainMessage } from "@/lib/brain/client";
 import { getCompassBrainContext } from "@/lib/brain/context";
 import { loadBrainConfigFromStore } from "@/lib/brain/settings-store";
 import { db } from "@/lib/db/client";
@@ -69,16 +69,11 @@ async function generateDailyPlan() {
 
 export default async function BrainPage() {
   const config = await loadBrainConfigFromStore();
-  const normalized = normalizeBrainConfig(config);
   const status = getBrainStatus(config);
   const context = await getCompassBrainContext();
 
   const messages = await db.select().from(hermesMessages).orderBy(desc(hermesMessages.createdAt)).limit(20);
   const [latestDailyPlan] = await db.select().from(insights).where(eq(insights.category, "daily_plan")).orderBy(desc(insights.createdAt)).limit(1);
-
-  const bridgeMode = normalized.provider === "hermes-bridge" && normalized.hermesBridgeUrl && normalized.hermesBridgeUrl.toLowerCase() !== "internal"
-    ? "external"
-    : "internal";
 
   return (
     <section className="space-y-6">
@@ -95,7 +90,6 @@ export default async function BrainPage() {
         <h2 className="text-lg font-semibold">Hermes 大脑状态</h2>
         <div className="mt-3 space-y-1 text-sm text-text-secondary">
           <p>当前 provider：{status.provider}</p>
-          <p>Hermes Bridge 模式：{bridgeMode}</p>
           <p>是否读取到 Compass 上下文：{context ? "是" : "否"}</p>
           <p>目标数量：{context.goals.length}</p>
           <p>习惯数量：{context.habits.length}</p>

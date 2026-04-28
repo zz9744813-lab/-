@@ -1,26 +1,19 @@
-import type { BrainMessageResult, BrainProvider, BrainRuntimeConfig, BrainStatus } from "@/lib/brain/types";
-import { handleHermesBridgeChat } from "@/lib/hermes-bridge/server";
+import type {
+  BrainMessageResult,
+  BrainProvider,
+  BrainRuntimeConfig,
+  BrainStatus,
+} from "@/lib/brain/types";
 
 export function normalizeBrainConfig(raw?: Partial<BrainRuntimeConfig>): BrainRuntimeConfig {
   const providerRaw = raw?.provider ?? (process.env.BRAIN_PROVIDER as BrainProvider | undefined) ?? "disabled";
-  const provider: BrainProvider =
-    providerRaw === "hermes-bridge" || providerRaw === "openai-compatible" || providerRaw === "disabled"
-      ? providerRaw
-      : "disabled";
+  const provider: BrainProvider = providerRaw === "hermes-bridge" ? "hermes-bridge" : "disabled";
 
   return {
     provider,
     hermesBridgeUrl: raw?.hermesBridgeUrl ?? process.env.HERMES_BRIDGE_URL,
     hermesBridgeToken: raw?.hermesBridgeToken ?? process.env.HERMES_BRIDGE_TOKEN,
-    aiBaseUrl: raw?.aiBaseUrl ?? process.env.AI_BASE_URL,
-    aiApiKey: raw?.aiApiKey ?? process.env.AI_API_KEY,
-    aiModel: raw?.aiModel ?? process.env.AI_MODEL,
   };
-}
-
-function isInternalBridgeMode(url?: string) {
-  if (!url) return true;
-  return url.trim().toLowerCase() === "internal";
 }
 
 export function getBrainStatus(configInput?: Partial<BrainRuntimeConfig>): BrainStatus {
@@ -28,68 +21,72 @@ export function getBrainStatus(configInput?: Partial<BrainRuntimeConfig>): Brain
 
   if (config.provider === "disabled") {
     return {
-      provider: config.provider,
+      provider: "disabled",
       configured: true,
       missingVars: [],
-      statusText: "大脑未接入，Compass 核心功能仍可使用",
+      statusText: "大脑未接入，Compass 核心功能仍可独立使用。",
     };
   }
 
-  if (config.provider === "hermes-bridge") {
-    const internalMode = isInternalBridgeMode(config.hermesBridgeUrl);
-    return {
-      provider: config.provider,
-      configured: true,
-      missingVars: [],
-      statusText: internalMode
-        ? "已配置内置 Hermes Bridge，可使用 Compass 内部桥接。"
-        : "已配置外部 Hermes Bridge URL，可调用外部桥接服务。",
-    };
+  const missingVars: string[] = [];
+  if (!config.hermesBridgeUrl || config.hermesBridgeUrl.trim() === "") {
+    missingVars.push("HERMES_BRIDGE_URL");
   }
-
-  const missingVars = [
-    !config.aiBaseUrl ? "AI_BASE_URL" : "",
-    !config.aiApiKey ? "AI_API_KEY" : "",
-    !config.aiModel ? "AI_MODEL" : "",
-  ].filter(Boolean);
 
   return {
-    provider: config.provider,
+    provider: "hermes-bridge",
     configured: missingVars.length === 0,
     missingVars,
-    statusText: missingVars.length === 0 ? "当前为直接模型模式，不经过 Hermes 记忆系统。" : "OpenAI-compatible 配置不完整",
+    statusText:
+      missingVars.length === 0
+        ? "已接入 Hermes 作为大脑，所有模型相关配置由 Hermes 负责。"
+        : "Hermes Bridge URL 未配置。",
   };
 }
 
-async function callExternalBridge(url: string, token: string | undefined, body: { message: string; context: Record<string, unknown> }) {
+async function callHermesBridge(
+  url: string,
+  token: string | undefined,
+  body: { message: string; context: Record<string, unknown> },
+): Promise<{ ok: true; response: string } | { ok: false; error: string }> {
   const base = url.replace(/\/$/, "");
-  const headers = {
-    "Content-Type": "application/json",
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token && token.trim() !== "") headers["Authorization"] = `Bearer ${token}`;
 
-  const candidates = [`${base}/chat`, `${base}/api/hermes-bridge/chat`];
-  let lastError = "";
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 60_000);
 
-  for (const endpoint of candidates) {
-    try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(body),
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        lastError = String((payload as { detail?: unknown; response?: unknown }).detail ?? (payload as { response?: unknown }).response ?? `请求失败（${response.status}）`);
-        continue;
-      }
-      return { ok: true as const, response: String((payload as { response?: unknown }).response ?? "（未返回内容）") };
-    } catch (error) {
-      lastError = error instanceof Error ? error.message : "未知错误";
+  try {
+    const response = await fetch(`${base}/chat`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+
+    const payload = (await response.json().catch(() => ({}))) as {
+      response?: string;
+      detail?: string;
+      error?: string;
+    };
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        error: payload.detail ?? payload.error ?? `Hermes Bridge 返回 ${response.status}`,
+      };
     }
-  }
 
-  return { ok: false as const, error: lastError || "无法连接外部 Hermes Bridge" };
+    const text = typeof payload.response === "string" ? payload.response : "";
+    return { ok: true, response: text || "（Hermes 未返回文本）" };
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      return { ok: false, error: "Hermes Bridge 请求超时（60 秒）" };
+    }
+    return { ok: false, error: error instanceof Error ? error.message : "未知错误" };
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export async function sendBrainMessage(
@@ -107,85 +104,33 @@ export async function sendBrainMessage(
   if (config.provider === "disabled") {
     return {
       ok: true,
-      provider: config.provider,
-      response: "当前未接入大脑。你可以在设置中配置 hermes-bridge 或 openai-compatible。",
+      provider: "disabled",
+      response: "当前未接入大脑。请到设置页配置 Hermes Bridge URL 后再试。",
     };
   }
 
-  if (config.provider === "hermes-bridge") {
-    if (isInternalBridgeMode(config.hermesBridgeUrl)) {
-      try {
-        const result = await handleHermesBridgeChat({ message: text, context });
-        return { ok: true, provider: config.provider, response: result.response };
-      } catch (error) {
-        return {
-          ok: false,
-          provider: config.provider,
-          response: "",
-          error: `内部 Hermes Bridge 调用失败：${error instanceof Error ? error.message : "未知错误"}`,
-        };
-      }
-    }
-
-    const external = await callExternalBridge(config.hermesBridgeUrl ?? "", config.hermesBridgeToken, { message: text, context });
-    if (!external.ok) {
-      return {
-        ok: false,
-        provider: config.provider,
-        response: "",
-        error: `无法连接外部 Hermes Bridge：${external.error}`,
-      };
-    }
-
-    return { ok: true, provider: config.provider, response: external.response };
-  }
-
-  if (!config.aiBaseUrl || !config.aiApiKey || !config.aiModel) {
+  if (!config.hermesBridgeUrl || config.hermesBridgeUrl.trim() === "") {
     return {
       ok: false,
-      provider: config.provider,
+      provider: "hermes-bridge",
       response: "",
-      error: "缺少 AI_BASE_URL / AI_API_KEY / AI_MODEL。",
+      error: "未配置 Hermes Bridge URL。请到设置页填写。",
     };
   }
 
-  try {
-    const response = await fetch(`${config.aiBaseUrl.replace(/\/$/, "")}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${config.aiApiKey}`,
-      },
-      body: JSON.stringify({
-        model: config.aiModel,
-        messages: [
-          { role: "system", content: "你是 Compass 的成长助理，请给出具体可执行建议。" },
-          { role: "user", content: `${text}\n\n上下文: ${JSON.stringify(context)}` },
-        ],
-      }),
-    });
+  const result = await callHermesBridge(config.hermesBridgeUrl, config.hermesBridgeToken, {
+    message: text,
+    context,
+  });
 
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      return {
-        ok: false,
-        provider: config.provider,
-        response: "",
-        error: (payload as { error?: { message?: string } })?.error?.message || `模型接口请求失败（${response.status}）`,
-      };
-    }
-
-    return {
-      ok: true,
-      provider: config.provider,
-      response: (payload as { choices?: Array<{ message?: { content?: string } }> })?.choices?.[0]?.message?.content?.trim() || "（模型未返回文本）",
-    };
-  } catch (error) {
+  if (!result.ok) {
     return {
       ok: false,
-      provider: config.provider,
+      provider: "hermes-bridge",
       response: "",
-      error: `调用模型失败：${error instanceof Error ? error.message : "未知错误"}`,
+      error: `调用 Hermes Bridge 失败：${result.error}`,
     };
   }
+
+  return { ok: true, provider: "hermes-bridge", response: result.response };
 }
