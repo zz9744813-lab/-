@@ -105,6 +105,35 @@ CREATE TABLE IF NOT EXISTS app_settings (
   value TEXT,
   updated_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS duolingo_snapshots (
+  date TEXT PRIMARY KEY NOT NULL,
+  streak INTEGER NOT NULL DEFAULT 0,
+  total_xp INTEGER NOT NULL DEFAULT 0,
+  daily_xp INTEGER NOT NULL DEFAULT 0,
+  current_course_id TEXT,
+  courses_json TEXT,
+  raw_json TEXT,
+  synced_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS duolingo_xp_events (
+  id TEXT PRIMARY KEY NOT NULL,
+  event_time INTEGER NOT NULL,
+  xp INTEGER NOT NULL,
+  skill_id TEXT,
+  course_id TEXT,
+  raw_json TEXT,
+  dedupe_key TEXT NOT NULL UNIQUE
+);
+CREATE TABLE IF NOT EXISTS duolingo_sync_log (
+  id TEXT PRIMARY KEY NOT NULL,
+  started_at INTEGER NOT NULL,
+  finished_at INTEGER,
+  status TEXT NOT NULL,
+  events_added INTEGER NOT NULL DEFAULT 0,
+  error_msg TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_duolingo_xp_event_time ON duolingo_xp_events(event_time);
 `);
 
 function ensureColumn(table: string, column: string, definition: string) {

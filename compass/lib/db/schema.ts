@@ -127,3 +127,34 @@ export const appSettings = sqliteTable("app_settings", {
   value: text("value"),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
 });
+
+
+export const duolingoSnapshots = sqliteTable("duolingo_snapshots", {
+  date: text("date").primaryKey(),
+  streak: integer("streak").notNull().default(0),
+  totalXp: integer("total_xp").notNull().default(0),
+  dailyXp: integer("daily_xp").notNull().default(0),
+  currentCourseId: text("current_course_id"),
+  coursesJson: text("courses_json"),
+  rawJson: text("raw_json"),
+  syncedAt: integer("synced_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const duolingoXpEvents = sqliteTable("duolingo_xp_events", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  eventTime: integer("event_time", { mode: "timestamp" }).notNull(),
+  xp: integer("xp").notNull(),
+  skillId: text("skill_id"),
+  courseId: text("course_id"),
+  rawJson: text("raw_json"),
+  dedupeKey: text("dedupe_key").notNull().unique(),
+});
+
+export const duolingoSyncLog = sqliteTable("duolingo_sync_log", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  startedAt: integer("started_at", { mode: "timestamp" }).notNull(),
+  finishedAt: integer("finished_at", { mode: "timestamp" }),
+  status: text("status").notNull(),
+  eventsAdded: integer("events_added").notNull().default(0),
+  errorMsg: text("error_msg"),
+});

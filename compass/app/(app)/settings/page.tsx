@@ -3,10 +3,16 @@ import { getBrainStatus, sendBrainMessage } from "@/lib/brain/client";
 import {
   loadBrainConfigFromStore,
   loadBrainTestResult,
-  maskSecret,
+  maskSecret as maskBrainSecret,
   saveBrainConfigToStore,
   saveBrainTestResult,
 } from "@/lib/brain/settings-store";
+import {
+  loadDuolingoConfig,
+  maskSecret as maskDuolingoSecret,
+  saveDuolingoConfig,
+} from "@/lib/duolingo/settings-store";
+import { runDuolingoSync } from "@/lib/duolingo/sync";
 
 async function saveSettings(formData: FormData) {
   "use server";
@@ -20,7 +26,7 @@ async function saveSettings(formData: FormData) {
     aiModel: String(formData.get("aiModel") ?? ""),
   });
 
-  await saveBrainTestResult("配置已保存。")
+  await saveBrainTestResult("配置已保存。");
   revalidatePath("/settings");
   revalidatePath("/brain");
 }
@@ -43,10 +49,31 @@ async function testConnection(formData: FormData) {
   revalidatePath("/settings");
 }
 
+async function saveDuolingoSettings(formData: FormData) {
+  "use server";
+
+  await saveDuolingoConfig({
+    jwt: String(formData.get("duolingoJwt") ?? ""),
+    userId: String(formData.get("duolingoUserId") ?? ""),
+    username: String(formData.get("duolingoUsername") ?? ""),
+    syncSecret: String(formData.get("duolingoSyncSecret") ?? ""),
+  });
+
+  revalidatePath("/settings");
+}
+
+async function triggerDuolingoSync() {
+  "use server";
+  await runDuolingoSync();
+  revalidatePath("/settings");
+  revalidatePath("/knowledge");
+}
+
 export default async function SettingsPage() {
   const stored = await loadBrainConfigFromStore();
   const status = getBrainStatus(stored);
   const testResult = await loadBrainTestResult();
+  const duoConfig = await loadDuolingoConfig();
 
   return (
     <section className="space-y-6">
@@ -97,10 +124,46 @@ export default async function SettingsPage() {
         <p>当前模式：{status.provider}</p>
         <p>配置状态：{status.configured ? "已配置" : "配置不完整"}</p>
         {status.missingVars.length > 0 ? <p>缺失字段：{status.missingVars.join("、")}</p> : null}
-        <p>Hermes Token：{maskSecret(stored.hermesBridgeToken)}</p>
-        <p>AI Key：{maskSecret(stored.aiApiKey)}</p>
+        <p>Hermes Token：{maskBrainSecret(stored.hermesBridgeToken)}</p>
+        <p>AI Key：{maskBrainSecret(stored.aiApiKey)}</p>
         <p className="mt-2">{status.statusText}</p>
         {testResult ? <p className="mt-2">连接测试：{testResult}</p> : null}
+      </article>
+
+      <article className="rounded-lg border border-border bg-bg-surface p-6">
+        <h2 className="text-lg font-semibold">Duolingo 同步</h2>
+        <form className="mt-4 space-y-3">
+          <div className="grid gap-3 md:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm text-text-secondary">JWT</label>
+              <input type="password" name="duolingoJwt" defaultValue={duoConfig.jwt ?? ""} className="w-full rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm text-text-secondary">User ID</label>
+              <input name="duolingoUserId" defaultValue={duoConfig.userId ?? ""} className="w-full rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm text-text-secondary">用户名（可选）</label>
+              <input name="duolingoUsername" defaultValue={duoConfig.username ?? ""} className="w-full rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm text-text-secondary">Sync Secret</label>
+              <input type="password" name="duolingoSyncSecret" defaultValue={duoConfig.syncSecret ?? ""} className="w-full rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm" />
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <button formAction={saveDuolingoSettings} className="rounded-md border border-accent bg-accent-muted px-4 py-2 text-sm">保存 Duolingo 配置</button>
+            <button formAction={triggerDuolingoSync} className="rounded-md border border-border px-4 py-2 text-sm">立即同步</button>
+          </div>
+        </form>
+
+        <div className="mt-4 space-y-1 text-sm text-text-secondary">
+          <p>最近同步时间：{duoConfig.lastSyncAt || "尚未同步"}</p>
+          <p>最近同步状态：{duoConfig.lastSyncStatus || "未知"}</p>
+          <p>JWT：{maskDuolingoSecret(duoConfig.jwt)}</p>
+          <p>Sync Secret：{maskDuolingoSecret(duoConfig.syncSecret)}</p>
+        </div>
       </article>
     </section>
   );
