@@ -1,15 +1,13 @@
-import { and, count, desc, eq, gte, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import {
   captures,
   duolingoSnapshots,
-  duolingoXpEvents,
   goals,
   habitLogs,
   habits,
   insights,
   journalEntries,
-  reviews,
 } from "@/lib/db/schema";
 
 function todayDateString() {
@@ -31,7 +29,7 @@ function truncateText(value: string, max = 300) {
   return `${value.slice(0, max)}…`;
 }
 
-export async function getDashboardContext() {
+async function getDashboardContext() {
   try {
     const today = todayDateString();
     const weekStart = weekStartDateString();
@@ -48,29 +46,12 @@ export async function getDashboardContext() {
       db.select({ value: count() }).from(journalEntries).where(gte(journalEntries.date, weekStart)),
     ]);
 
-    const [latestInsight] = await db.select().from(insights).orderBy(desc(insights.createdAt)).limit(1);
-    const [latestReview] = await db.select().from(reviews).orderBy(desc(reviews.createdAt)).limit(1);
-
     return {
       activeGoalsCount: activeGoals[0]?.value ?? 0,
       activeHabitsCount: activeHabits[0]?.value ?? 0,
       completedHabitsToday: completedHabitsToday[0]?.value ?? 0,
       inboxCount: inboxCount[0]?.value ?? 0,
       journalEntriesThisWeek: journalWeek[0]?.value ?? 0,
-      latestInsight: latestInsight
-        ? {
-            title: latestInsight.title,
-            category: latestInsight.category,
-            createdAt: latestInsight.createdAt,
-          }
-        : null,
-      latestReview: latestReview
-        ? {
-            title: latestReview.title,
-            period: latestReview.period,
-            createdAt: latestReview.createdAt,
-          }
-        : null,
     };
   } catch {
     return {
@@ -79,41 +60,13 @@ export async function getDashboardContext() {
       completedHabitsToday: 0,
       inboxCount: 0,
       journalEntriesThisWeek: 0,
-      latestInsight: null,
-      latestReview: null,
     };
   }
 }
 
-export async function getRecentJournalContext(days = 7) {
+async function getGoalsContext() {
   try {
-    const from = new Date();
-    from.setDate(from.getDate() - Math.max(0, days - 1));
-    const fromDate = from.toISOString().slice(0, 10);
-
-    const rows = await db
-      .select()
-      .from(journalEntries)
-      .where(gte(journalEntries.date, fromDate))
-      .orderBy(desc(journalEntries.date), desc(journalEntries.createdAt))
-      .limit(200);
-
-    return rows.map((row) => ({
-      date: row.date,
-      title: row.title ?? "",
-      mood: row.mood,
-      tags: row.tags,
-      content: truncateText(row.content, 300),
-      source: "source" in row ? (row as { source?: string }).source ?? "web" : "web",
-    }));
-  } catch {
-    return [] as Array<{ date: string; title: string; mood: number | null; tags: string | null; content: string; source: string }>;
-  }
-}
-
-export async function getGoalsContext() {
-  try {
-    const rows = await db.select().from(goals).orderBy(desc(goals.createdAt)).limit(200);
+    const rows = await db.select().from(goals).orderBy(desc(goals.createdAt)).limit(20);
     return rows.map((row) => ({
       id: row.id,
       title: row.title,
@@ -127,7 +80,7 @@ export async function getGoalsContext() {
   }
 }
 
-export async function getHabitsContext() {
+async function getHabitsContext() {
   try {
     const today = todayDateString();
     const rows = await db.select().from(habits).where(eq(habits.status, "active")).orderBy(desc(habits.createdAt)).limit(200);
@@ -154,14 +107,39 @@ export async function getHabitsContext() {
   }
 }
 
-export async function getInboxContext(limit = 20) {
+async function getRecentJournalContext() {
+  try {
+    const from = new Date();
+    from.setDate(from.getDate() - 6);
+    const fromDate = from.toISOString().slice(0, 10);
+
+    const rows = await db
+      .select()
+      .from(journalEntries)
+      .where(gte(journalEntries.date, fromDate))
+      .orderBy(desc(journalEntries.date), desc(journalEntries.createdAt))
+      .limit(200);
+
+    return rows.map((row) => ({
+      date: row.date,
+      title: row.title ?? "",
+      mood: row.mood,
+      tags: row.tags,
+      content: truncateText(row.content, 300),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+async function getInboxContext() {
   try {
     const rows = await db
       .select()
       .from(captures)
       .where(eq(captures.status, "inbox"))
       .orderBy(desc(captures.createdAt))
-      .limit(limit);
+      .limit(20);
 
     return rows.map((row) => ({
       id: row.id,
@@ -175,26 +153,10 @@ export async function getInboxContext(limit = 20) {
   }
 }
 
-export async function getDuolingoContext() {
+async function getDuolingoContext() {
   try {
     const [latest] = await db.select().from(duolingoSnapshots).orderBy(desc(duolingoSnapshots.date)).limit(1);
     if (!latest) return null;
-
-    const last7From = new Date();
-    last7From.setDate(last7From.getDate() - 6);
-
-    const last30From = new Date();
-    last30From.setDate(last30From.getDate() - 29);
-
-    const [sum7] = await db
-      .select({ value: sql<number>`coalesce(sum(${duolingoXpEvents.xp}), 0)` })
-      .from(duolingoXpEvents)
-      .where(gte(duolingoXpEvents.eventTime, last7From));
-
-    const [sum30] = await db
-      .select({ value: sql<number>`coalesce(sum(${duolingoXpEvents.xp}), 0)` })
-      .from(duolingoXpEvents)
-      .where(gte(duolingoXpEvents.eventTime, last30From));
 
     let courses: unknown[] = [];
     try {
@@ -205,39 +167,51 @@ export async function getDuolingoContext() {
     }
 
     return {
-      latestSnapshot: {
-        date: latest.date,
-        streak: latest.streak,
-        totalXp: latest.totalXp,
-        dailyXp: latest.dailyXp,
-        currentCourseId: latest.currentCourseId,
-        syncedAt: latest.syncedAt,
-      },
-      last7DaysXp: Number(sum7?.value ?? 0),
-      last30DaysXp: Number(sum30?.value ?? 0),
+      streak: latest.streak,
+      totalXp: latest.totalXp,
+      dailyXp: latest.dailyXp,
       courses,
+      date: latest.date,
+      syncedAt: latest.syncedAt,
     };
   } catch {
     return null;
   }
 }
 
+async function getInsightsContext() {
+  try {
+    const rows = await db.select().from(insights).orderBy(desc(insights.createdAt)).limit(5);
+    return rows.map((row) => ({
+      id: row.id,
+      category: row.category,
+      title: row.title,
+      body: truncateText(row.body, 300),
+      createdAt: row.createdAt,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 export async function getCompassBrainContext() {
-  const [dashboard, journals, goalsData, habitsData, inbox, duolingo] = await Promise.all([
+  const [dashboard, goalsData, habitsData, journals, inbox, duolingo, insightsData] = await Promise.all([
     getDashboardContext(),
-    getRecentJournalContext(7),
     getGoalsContext(),
     getHabitsContext(),
-    getInboxContext(20),
+    getRecentJournalContext(),
+    getInboxContext(),
     getDuolingoContext(),
+    getInsightsContext(),
   ]);
 
   return {
     dashboard,
-    journals,
     goals: goalsData,
     habits: habitsData,
+    journals,
     inbox,
     duolingo,
+    insights: insightsData,
   };
 }

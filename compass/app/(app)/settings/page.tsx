@@ -19,7 +19,7 @@ async function saveSettings(formData: FormData) {
 
   await saveBrainConfigToStore({
     provider: String(formData.get("provider") ?? "disabled") as "disabled" | "hermes-bridge" | "openai-compatible",
-    hermesBridgeUrl: String(formData.get("hermesBridgeUrl") ?? ""),
+    hermesBridgeUrl: String(formData.get("hermesBridgeUrl") ?? "internal").trim() || "internal",
     hermesBridgeToken: String(formData.get("hermesBridgeToken") ?? ""),
     aiBaseUrl: String(formData.get("aiBaseUrl") ?? ""),
     aiApiKey: String(formData.get("aiApiKey") ?? ""),
@@ -36,7 +36,7 @@ async function testConnection(formData: FormData) {
 
   const config = {
     provider: String(formData.get("provider") ?? "disabled") as "disabled" | "hermes-bridge" | "openai-compatible",
-    hermesBridgeUrl: String(formData.get("hermesBridgeUrl") ?? ""),
+    hermesBridgeUrl: String(formData.get("hermesBridgeUrl") ?? "internal").trim() || "internal",
     hermesBridgeToken: String(formData.get("hermesBridgeToken") ?? ""),
     aiBaseUrl: String(formData.get("aiBaseUrl") ?? ""),
     aiApiKey: String(formData.get("aiApiKey") ?? ""),
@@ -44,7 +44,11 @@ async function testConnection(formData: FormData) {
   };
 
   const result = await sendBrainMessage("这是连接测试，请回复“连接成功”。", { from: "settings-test" }, config);
-  await saveBrainTestResult(result.ok ? `测试成功：${result.response}` : `测试失败：${result.error ?? "未知错误"}`);
+  if (result.ok && result.response.includes("内部桥接可用，但尚未连接 Hermes Agent 或模型")) {
+    await saveBrainTestResult("内部桥接可用，但尚未连接 Hermes Agent 或模型。");
+  } else {
+    await saveBrainTestResult(result.ok ? `测试成功：${result.response}` : `测试失败：${result.error ?? "未知错误"}`);
+  }
 
   revalidatePath("/settings");
 }
@@ -93,7 +97,8 @@ export default async function SettingsPage() {
             </div>
             <div>
               <label className="mb-1 block text-sm text-text-secondary">Hermes Bridge URL</label>
-              <input name="hermesBridgeUrl" defaultValue={stored.hermesBridgeUrl ?? ""} placeholder="http://127.0.0.1:8787" className="w-full rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm" />
+              <input name="hermesBridgeUrl" defaultValue={stored.hermesBridgeUrl ?? "internal"} placeholder="internal 或 http://127.0.0.1:8787" className="w-full rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm" />
+              <p className="mt-1 text-xs text-text-secondary">internal：使用 Compass 内置桥接；URL：使用外部 Hermes Bridge 服务。</p>
             </div>
             <div>
               <label className="mb-1 block text-sm text-text-secondary">AI Base URL</label>

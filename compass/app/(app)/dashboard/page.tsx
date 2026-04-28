@@ -32,7 +32,7 @@ export default async function DashboardPage() {
   ]);
 
   const [latestReview] = await db.select().from(reviews).orderBy(desc(reviews.createdAt)).limit(1);
-  const [latestInsight] = await db.select().from(insights).orderBy(desc(insights.createdAt)).limit(1);
+  const [latestDailyPlan] = await db.select().from(insights).where(eq(insights.category, "daily_plan")).orderBy(desc(insights.createdAt)).limit(1);
 
   const activeGoals = activeGoalsResult[0]?.value ?? 0;
   const habitTotal = activeHabitsResult[0]?.value ?? 0;
@@ -79,9 +79,9 @@ export default async function DashboardPage() {
         </Link>
 
         <Link href="/brain" className={CARD_STYLE}>
-          <p className="text-xs text-text-secondary">最新洞察</p>
-          <p className="mt-2 line-clamp-2 text-sm">{latestInsight ? latestInsight.title : "暂无洞察"}</p>
-          <p className="mt-2 text-xs text-text-secondary">{latestInsight ? "点击进入大脑查看更多" : "去大脑页面测试连接并获取建议"}</p>
+          <p className="text-xs text-text-secondary">最新今日行动计划</p>
+          <p className="mt-2 line-clamp-2 text-sm">{latestDailyPlan ? latestDailyPlan.title : "暂无今日行动计划"}</p>
+          <p className="mt-2 text-xs text-text-secondary">{latestDailyPlan ? "点击进入大脑查看更多" : "去大脑页面生成今日行动计划"}</p>
         </Link>
       </div>
     </section>
