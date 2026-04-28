@@ -25,10 +25,9 @@ What makes it different from Notion templates: it doesn't have its own AI brain.
 - Inbox page listing captures
 
 **Next up — Phase 2** (Hermes integration):
-- HTTP client to Hermes
+- Provider-based brain client (disabled/hermes-bridge/openai-compatible)
 - MCP server exposing Compass data
-- Quick Capture routed through Hermes for auto-classification
-- Brain page MVP (live chat with Hermes)
+- Brain page provider-aware chat MVP
 
 ## Stack
 
@@ -38,7 +37,7 @@ Language:      TypeScript (strict)
 Styling:       Tailwind + CSS variables
 DB:            SQLite via better-sqlite3
 ORM:           Drizzle
-AI:            All inference goes through Hermes (no direct LLM SDK)
+AI:            Provider-based brain config (disabled / hermes-bridge / openai-compatible)
 MCP:           @modelcontextprotocol/sdk
 ```
 
@@ -50,6 +49,17 @@ pnpm install
 pnpm db:migrate
 pnpm dev      # opens at http://localhost:3001
 ```
+
+
+## Brain configuration
+
+Compass 使用 provider-based 大脑配置：
+
+- `BRAIN_PROVIDER=disabled`（默认，可离线独立使用）
+- `BRAIN_PROVIDER=hermes-bridge`（推荐，走本机 Hermes Bridge）
+- `BRAIN_PROVIDER=openai-compatible`（备用直连模式）
+
+对应环境变量见 `compass/.env.example`。
 
 ## Deploy on VPS
 

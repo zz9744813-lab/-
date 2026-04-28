@@ -48,7 +48,9 @@ Environment=NODE_ENV=production
 Environment=PORT=3001
 Environment=HOSTNAME=127.0.0.1
 Environment=DATABASE_URL=file:/opt/compass/data/compass.db
-Environment=HERMES_API_URL=http://127.0.0.1:8080
+Environment=BRAIN_PROVIDER=hermes-bridge
+Environment=HERMES_BRIDGE_URL=http://127.0.0.1:8787
+Environment=HERMES_BRIDGE_TOKEN=replace-me-with-openssl-rand-hex-32
 Environment=HERMES_TOKEN=replace-me-with-openssl-rand-hex-32
 
 MemoryMax=400M
@@ -100,3 +102,20 @@ DATE=$(date +%Y%m%d-%H%M)
 sqlite3 /opt/compass/data/compass.db ".backup /tmp/compass-$DATE.db"
 ```
 Add to crontab and push to B2/R2/NAS via rclone.
+
+
+## Brain provider env (recommended)
+
+```env
+BRAIN_PROVIDER=hermes-bridge
+HERMES_BRIDGE_URL=http://127.0.0.1:8787
+HERMES_BRIDGE_TOKEN=replace-me
+
+# Fallback mode only
+# BRAIN_PROVIDER=openai-compatible
+# AI_BASE_URL=https://api.openai.com/v1
+# AI_API_KEY=...
+# AI_MODEL=gpt-4o-mini
+```
+
+默认建议保持 `BRAIN_PROVIDER=disabled` 或 `hermes-bridge`，不要优先使用 `HERMES_API_URL`。
