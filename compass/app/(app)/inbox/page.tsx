@@ -3,6 +3,9 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import { captures } from "@/lib/db/schema";
 
+
+export const dynamic = "force-dynamic";
+
 async function createCapture(formData: FormData) {
   "use server";
   const rawText = String(formData.get("rawText") ?? "").trim();

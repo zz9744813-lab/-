@@ -5,13 +5,16 @@ import type {
   BrainStatus,
 } from "@/lib/brain/types";
 
+const DEFAULT_HERMES_BRIDGE_URL = "http://127.0.0.1:8787";
+
 export function normalizeBrainConfig(raw?: Partial<BrainRuntimeConfig>): BrainRuntimeConfig {
-  const providerRaw = raw?.provider ?? (process.env.BRAIN_PROVIDER as BrainProvider | undefined) ?? "disabled";
-  const provider: BrainProvider = providerRaw === "hermes-bridge" ? "hermes-bridge" : "disabled";
+  const providerRaw = raw?.provider ?? (process.env.BRAIN_PROVIDER as BrainProvider | undefined);
+  const hermesBridgeUrl = raw?.hermesBridgeUrl ?? process.env.HERMES_BRIDGE_URL ?? DEFAULT_HERMES_BRIDGE_URL;
+  const provider: BrainProvider = providerRaw === "disabled" ? "disabled" : "hermes-bridge";
 
   return {
     provider,
-    hermesBridgeUrl: raw?.hermesBridgeUrl ?? process.env.HERMES_BRIDGE_URL,
+    hermesBridgeUrl,
     hermesBridgeToken: raw?.hermesBridgeToken ?? process.env.HERMES_BRIDGE_TOKEN,
   };
 }
@@ -60,7 +63,7 @@ export function getBrainStatus(configInput?: Partial<BrainRuntimeConfig>): Brain
   if (config.provider === "disabled") {
     return {
       provider: "disabled",
-      configured: true,
+      configured: false,
       missingVars: [],
       statusText: "大脑未接入，Compass 核心功能仍可独立使用。",
     };

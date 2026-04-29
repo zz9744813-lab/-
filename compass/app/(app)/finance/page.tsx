@@ -3,6 +3,9 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import { financeTransactions } from "@/lib/db/schema";
 
+
+export const dynamic = "force-dynamic";
+
 async function createTransaction(formData: FormData) {
   "use server";
   const type = String(formData.get("type") ?? "expense").trim();

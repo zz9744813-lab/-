@@ -4,6 +4,9 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import { journalEntries } from "@/lib/db/schema";
 
+
+export const dynamic = "force-dynamic";
+
 async function createEntry(formData: FormData) {
   "use server";
   const title = String(formData.get("title") ?? "").trim();

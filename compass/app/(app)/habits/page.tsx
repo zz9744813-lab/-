@@ -4,6 +4,9 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import { habitLogs, habits } from "@/lib/db/schema";
 
+
+export const dynamic = "force-dynamic";
+
 function today() {
   return new Date().toISOString().slice(0, 10);
 }

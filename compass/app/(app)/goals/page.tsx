@@ -3,6 +3,9 @@ import { desc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import { goals } from "@/lib/db/schema";
+import { formatDate, formatDateInput } from "@/lib/datetime";
+
+export const dynamic = "force-dynamic";
 
 function clampProgress(value: number): number {
   return Math.max(0, Math.min(100, value));
@@ -126,7 +129,7 @@ export default async function GoalsPage({ searchParams }: { searchParams?: { edi
                         <option value="completed">已完成</option>
                         <option value="paused">暂停</option>
                       </select>
-                      <input type="date" name="targetDate" defaultValue={goal.targetDate ? goal.targetDate.toISOString().slice(0, 10) : ""} className="rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm" />
+                      <input type="date" name="targetDate" defaultValue={formatDateInput(goal.targetDate)} className="rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm" />
                     </div>
                     <div className="flex gap-2">
                       <button type="submit" className="rounded-md border border-accent bg-accent-muted px-3 py-1.5 text-sm">保存修改</button>
@@ -140,7 +143,7 @@ export default async function GoalsPage({ searchParams }: { searchParams?: { edi
                       <p className="text-sm text-text-secondary">{goal.description || "暂无描述"}</p>
                       <p className="mt-1 text-xs text-text-secondary">
                         状态：{goal.status === "active" ? "进行中" : goal.status === "completed" ? "已完成" : "暂停"} · 截止：
-                        {goal.targetDate ? goal.targetDate.toISOString().slice(0, 10) : "未设置"} · 创建于 {goal.createdAt.toISOString().slice(0, 10)}
+                        {goal.targetDate ? goal.targetDate.toISOString().slice(0, 10) : "未设置"} · 创建于 {formatDate(goal.createdAt, "??")}
                       </p>
                     </div>
                     <div>
