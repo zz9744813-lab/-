@@ -88,4 +88,78 @@ Compass 端只需要在设置页填两件事：
 | Hermes Bridge URL | `http://127.0.0.1:8787`（如果同机器部署） |
 | Hermes Bridge Token | 与 systemd unit 中 `HERMES_BRIDGE_TOKEN` 一致；留空则不鉴权 |
 
-模型(DeepSeek/OpenRouter/API Key) **不再** 在 Compass 配置 —— 完全由 Hermes 自己管理。
+模型（DeepSeek/OpenRouter/NVIDIA/SiliconFlow 等）的 provider、API Key、模型名 **不再** 在 Compass 配置。Compass 只负责把消息转发给 bridge。
+
+## Provider 配置最佳实践
+
+Hermes 的 gateway（Discord/Telegram/邮件等）和 hermes-bridge（Web）是**两个独立的 systemd 服务**。它们都需要能拿到 provider key,否则会出现 **"Web 能聊但 Discord 报 no API key"** 这类 split-brain bug(已经踩过坑)。
+
+bridge 内部有 **两条调用路径**:
+
+```
+Compass → bridge → ① Hermes AIAgent (走 ~/.hermes/config.yaml,和 Discord 共用)
+                  └─ 失败时 → ② direct fallback (HERMES_BRIDGE_FALLBACK_* env 直连 OpenAI 兼容 API)
+```
+
+为了避免 split-brain,推荐这套组合:
+
+### 1. `~/.hermes/config.yaml` —— 主路径(Hermes AIAgent)
+
+```yaml
+model:
+  provider: custom                        # custom = 通用 OpenAI 兼容协议
+  base_url: https://integrate.api.nvidia.com/v1
+  default: moonshotai/kimi-k2-instruct    # 在 build.nvidia.com 上的实际 model id
+  api_key: nvapi-...                      # 直接写到 yaml 里(yaml 在 /root 下,不进 git)
+fallback_model:
+  provider: custom
+  base_url: https://api.siliconflow.cn
+  model: deepseek-ai/DeepSeek-V3.2
+  api_key: sk-...
+```
+
+`hermes config set` 命令可以代替手动编辑:
+```bash
+hermes config set model.provider custom
+hermes config set model.base_url https://integrate.api.nvidia.com/v1
+hermes config set model.default moonshotai/kimi-k2-instruct
+hermes config set model.api_key 'nvapi-...'
+hermes config set fallback_model.api_key 'sk-...'
+```
+
+### 2. `~/.hermes/runtime.env` —— API Keys 单一来源
+
+bridge 和 gateway 都 `EnvironmentFile=-/root/.hermes/runtime.env`,这里改一处两边生效。
+**不进 git,文件权限 600**:
+
+```bash
+NVIDIA_API_KEY=nvapi-...
+SILICONFLOW_API_KEY=sk-...
+
+# bridge 的 direct-fallback 直接用这把 key(通常等于 SiliconFlow,作为最后一道兜底)
+HERMES_BRIDGE_FALLBACK_API_KEY=sk-...
+```
+
+### 3. `hermes-bridge.service` —— 只放 bridge 自己的设定
+
+URL 和 model 名可以写,API key **不要** 写。例子见 `systemd/hermes-bridge.service.example`,关键两行:
+
+```ini
+EnvironmentFile=-/root/.hermes/runtime.env
+Environment=HERMES_BRIDGE_FALLBACK_BASE_URL=https://api.siliconflow.cn/v1
+Environment=HERMES_BRIDGE_FALLBACK_MODEL=deepseek-ai/DeepSeek-V3.2
+```
+
+### 改完后两个服务都要重启
+
+```bash
+systemctl daemon-reload
+systemctl restart hermes-gateway hermes-bridge
+systemctl status hermes-gateway hermes-bridge --no-pager | head -20
+
+# 自检
+curl -s http://127.0.0.1:8787/health
+curl -s -X POST http://127.0.0.1:8787/chat \
+     -H 'Content-Type: application/json' \
+     -d '{"message":"自报家门:你正在用什么模型?","context":{}}'
+```
