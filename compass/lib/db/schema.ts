@@ -113,6 +113,22 @@ export const insights = sqliteTable("insights", {
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
 });
 
+export const scheduleItems = sqliteTable("schedule_items", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  title: text("title").notNull(),
+  description: text("description"),
+  date: text("date").notNull(),
+  startTime: text("start_time"),
+  endTime: text("end_time"),
+  priority: text("priority").notNull().default("medium"),
+  status: text("status").notNull().default("planned"),
+  source: text("source").notNull().default("hermes"),
+  sourceMessageId: text("source_message_id"),
+  evidence: text("evidence"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+});
+
 export const skillsCache = sqliteTable("skills_cache", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),

@@ -119,6 +119,23 @@ CREATE TABLE IF NOT EXISTS insights (
   acknowledged_by_user INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL DEFAULT (unixepoch())
 );
+CREATE TABLE IF NOT EXISTS schedule_items (
+  id TEXT PRIMARY KEY NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT,
+  date TEXT NOT NULL,
+  start_time TEXT,
+  end_time TEXT,
+  priority TEXT NOT NULL DEFAULT 'medium',
+  status TEXT NOT NULL DEFAULT 'planned',
+  source TEXT NOT NULL DEFAULT 'hermes',
+  source_message_id TEXT,
+  evidence TEXT,
+  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+  updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
+CREATE INDEX IF NOT EXISTS idx_schedule_items_date ON schedule_items(date);
+CREATE INDEX IF NOT EXISTS idx_schedule_items_status ON schedule_items(status);
 CREATE TABLE IF NOT EXISTS skills_cache (
   id TEXT PRIMARY KEY NOT NULL,
   name TEXT NOT NULL,
@@ -183,6 +200,7 @@ const timestampColumns: Record<string, string[]> = {
   reviews: ["created_at"],
   hermes_messages: ["created_at"],
   insights: ["created_at"],
+  schedule_items: ["created_at", "updated_at"],
   skills_cache: ["created_at", "synced_at"],
   app_settings: ["updated_at"],
   duolingo_snapshots: ["synced_at"],
