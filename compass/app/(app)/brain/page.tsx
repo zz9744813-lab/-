@@ -1,6 +1,5 @@
 import { desc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { BrainChatPanel, type BrainChatMessageView } from "@/components/brain/brain-chat-panel";
 import { getBrainStatus, probeBridgeHealth, sendBrainMessage } from "@/lib/brain/client";
 import { getCompassBrainContext } from "@/lib/brain/context";
 import { loadBrainConfigFromStore } from "@/lib/brain/settings-store";
@@ -48,15 +47,6 @@ async function generateDailyPlan() {
   revalidatePath("/dashboard");
 }
 
-function toBrainMessageView(row: typeof hermesMessages.$inferSelect): BrainChatMessageView {
-  return {
-    id: row.id,
-    role: row.role === "user" ? "user" : "assistant",
-    content: row.content,
-    createdAt: formatDateTime(row.createdAt),
-  };
-}
-
 export default async function BrainPage() {
   const config = await loadBrainConfigFromStore();
   const status = getBrainStatus(config);
@@ -69,9 +59,8 @@ export default async function BrainPage() {
         ? `connected - ${health.latencyMs}ms`
         : `unreachable - ${health.reason}`
       : "disabled";
-  const chatStatusLabel = brainReady ? `已连接 · ${health.latencyMs} ms` : health.reachable ? "配置未完成" : `未连接 · ${health.reason}`;
 
-  const messages = await db.select().from(hermesMessages).orderBy(desc(hermesMessages.createdAt)).limit(20);
+  const recentMessages = await db.select().from(hermesMessages).orderBy(desc(hermesMessages.createdAt)).limit(10);
   const [latestDailyPlan] = await db.select().from(insights).where(eq(insights.category, "daily_plan")).orderBy(desc(insights.createdAt)).limit(1);
 
   return (
@@ -84,6 +73,7 @@ export default async function BrainPage() {
         {status.missingVars.length > 0 ? <p>缺失字段：{status.missingVars.join("、")}</p> : null}
         <p className="mt-2">{status.statusText}</p>
         <p className="mt-2">Bridge: {healthLabel}</p>
+        <p className="mt-2 text-text-tertiary">需要对话或上传文件 → 去「总览」页面的 Hermes 对话区域。</p>
       </article>
 
       <article className="rounded-lg border border-border bg-bg-surface p-6">
@@ -108,17 +98,25 @@ export default async function BrainPage() {
         </div>
       </article>
 
-      <BrainChatPanel
-        source="brain"
-        initialMessages={messages.slice().reverse().map(toBrainMessageView)}
-        statusLabel={chatStatusLabel}
-        isLive={brainReady}
-        disabled={!brainReady}
-      />
-
       <article className="rounded-lg border border-border bg-bg-surface p-6">
         <h2 className="text-lg font-semibold">最新今日行动计划</h2>
         <p className="mt-3 whitespace-pre-wrap text-sm text-text-secondary">{latestDailyPlan?.body ?? "尚未生成。"}</p>
+      </article>
+
+      <article className="rounded-lg border border-border bg-bg-surface p-6">
+        <h2 className="text-lg font-semibold">最近消息</h2>
+        {recentMessages.length === 0 ? (
+          <p className="mt-3 text-sm text-text-secondary">暂无对话记录。去总览发起一段对话。</p>
+        ) : (
+          <ul className="mt-3 space-y-2 text-sm">
+            {recentMessages.map((msg) => (
+              <li key={msg.id} className="rounded-md border border-border-subtle p-3">
+                <p className="text-xs text-text-tertiary">{msg.role === "user" ? "我" : "Hermes"} · {formatDateTime(msg.createdAt)}</p>
+                <p className="mt-1 line-clamp-3 text-text-primary">{msg.content}</p>
+              </li>
+            ))}
+          </ul>
+        )}
       </article>
     </section>
   );

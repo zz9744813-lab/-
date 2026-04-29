@@ -1,11 +1,22 @@
 import { Buffer } from "node:buffer";
 import { NextResponse } from "next/server";
 import { sendBrainMessage } from "@/lib/brain/client";
+import { applyCompassActions, extractCompassActions } from "@/lib/brain/compass-actions";
 import { getCompassBrainContext } from "@/lib/brain/context";
 import { loadBrainConfigFromStore } from "@/lib/brain/settings-store";
 import { db } from "@/lib/db/client";
 import { hermesMessages } from "@/lib/db/schema";
 import { formatDateTime } from "@/lib/datetime";
+
+const SCHEDULE_HINT = [
+  "If the user is asking you to schedule items, plan their day, or extract events from uploaded files,",
+  "include a fenced JSON block in your reply with this exact shape:",
+  "```json",
+  '{"compassActions":[{"type":"create_schedule_item","title":"...","description":"...","date":"YYYY-MM-DD","startTime":"HH:mm","endTime":"HH:mm","priority":"low|medium|high","evidence":"why you scheduled this"}]}',
+  "```",
+  "Compass will only persist what's inside that JSON block. Keep startTime/endTime/description/evidence optional but recommended.",
+  "Date must be YYYY-MM-DD; time must be HH:mm. If the user did not ask for scheduling, omit the JSON block.",
+].join("\n");
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -168,8 +179,10 @@ export async function POST(request: Request) {
       createdAt,
     });
 
+    const promptForBrain = `${userContent}\n\n[Compass scheduling protocol]\n${SCHEDULE_HINT}`;
+
     const result = await sendBrainMessage(
-      userContent,
+      promptForBrain,
       {
         page: source,
         compass,
@@ -183,12 +196,25 @@ export async function POST(request: Request) {
     const assistantCreatedAt = new Date();
     const assistantContent = result.ok ? result.response : `错误：${result.error ?? "未知错误"}`;
 
+    let actionResults: Awaited<ReturnType<typeof applyCompassActions>> = [];
+    if (result.ok) {
+      const actions = extractCompassActions(result.response);
+      if (actions.length > 0) {
+        actionResults = await applyCompassActions(actions, assistantMessageId);
+      }
+    }
+
     await db.insert(hermesMessages).values({
       id: assistantMessageId,
       role: "assistant",
       content: assistantContent,
       source,
-      toolCall: JSON.stringify({ provider: result.provider, ok: result.ok, attachments: storedAttachments }),
+      toolCall: JSON.stringify({
+        provider: result.provider,
+        ok: result.ok,
+        attachments: storedAttachments,
+        compassActions: actionResults,
+      }),
       createdAt: assistantCreatedAt,
     });
 
@@ -210,6 +236,7 @@ export async function POST(request: Request) {
           createdAt: formatDateTime(assistantCreatedAt),
           attachments: [],
         },
+        compassActions: actionResults,
       },
       { status: result.ok ? 200 : 502 },
     );
