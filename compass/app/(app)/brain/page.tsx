@@ -1,5 +1,6 @@
 import { desc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { BrainChatPanel, type BrainChatMessageView } from "@/components/brain/brain-chat-panel";
 import { getBrainStatus, probeBridgeHealth, sendBrainMessage } from "@/lib/brain/client";
 import { getCompassBrainContext } from "@/lib/brain/context";
 import { loadBrainConfigFromStore } from "@/lib/brain/settings-store";
@@ -8,30 +9,6 @@ import { hermesMessages, insights } from "@/lib/db/schema";
 import { formatDateTime } from "@/lib/datetime";
 
 export const dynamic = "force-dynamic";
-
-async function askBrain(formData: FormData) {
-  "use server";
-
-  const question = String(formData.get("question") ?? "").trim();
-  if (!question) return;
-
-  const config = await loadBrainConfigFromStore();
-  const status = getBrainStatus(config);
-  const context = await getCompassBrainContext();
-
-  await db.insert(hermesMessages).values({ role: "user", content: question, source: "web" });
-
-  const result = await sendBrainMessage(question, { page: "brain", compass: context }, config);
-
-  await db.insert(hermesMessages).values({
-    role: "assistant",
-    content: result.ok ? result.response : `错误：${result.error ?? "未知错误"}`,
-    source: "web",
-    toolCall: JSON.stringify({ provider: status.provider, ok: result.ok }),
-  });
-
-  revalidatePath("/brain");
-}
 
 async function testReadContext() {
   "use server";
@@ -57,7 +34,7 @@ async function generateDailyPlan() {
     "  3. 如果只能做一件事，做什么",
   ].join("\n");
 
-  const result = await sendBrainMessage(prompt, context, config);
+  const result = await sendBrainMessage(prompt, { page: "brain", compass: context }, config);
 
   await db.insert(insights).values({
     category: "daily_plan",
@@ -69,6 +46,15 @@ async function generateDailyPlan() {
 
   revalidatePath("/brain");
   revalidatePath("/dashboard");
+}
+
+function toBrainMessageView(row: typeof hermesMessages.$inferSelect): BrainChatMessageView {
+  return {
+    id: row.id,
+    role: row.role === "user" ? "user" : "assistant",
+    content: row.content,
+    createdAt: formatDateTime(row.createdAt),
+  };
 }
 
 export default async function BrainPage() {
@@ -83,6 +69,7 @@ export default async function BrainPage() {
         ? `connected - ${health.latencyMs}ms`
         : `unreachable - ${health.reason}`
       : "disabled";
+  const chatStatusLabel = brainReady ? `已连接 · ${health.latencyMs} ms` : health.reachable ? "配置未完成" : `未连接 · ${health.reason}`;
 
   const messages = await db.select().from(hermesMessages).orderBy(desc(hermesMessages.createdAt)).limit(20);
   const [latestDailyPlan] = await db.select().from(insights).where(eq(insights.category, "daily_plan")).orderBy(desc(insights.createdAt)).limit(1);
@@ -121,44 +108,17 @@ export default async function BrainPage() {
         </div>
       </article>
 
-      {!brainReady ? (
-        <article className="rounded-lg border border-border bg-bg-surface p-6 text-text-secondary">
-          大脑未接入，请先在设置中配置大脑。
-        </article>
-      ) : (
-        <article className="rounded-lg border border-border bg-bg-surface p-6">
-          <h2 className="text-lg font-semibold">提问</h2>
-          <form action={askBrain} className="mt-4 flex flex-col gap-3 sm:flex-row">
-            <input
-              name="question"
-              required
-              placeholder="问问你的成长系统……"
-              className="w-full rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm"
-            />
-            <button type="submit" className="rounded-md border border-accent bg-accent-muted px-4 py-2 text-sm">发送</button>
-          </form>
-        </article>
-      )}
+      <BrainChatPanel
+        source="brain"
+        initialMessages={messages.slice().reverse().map(toBrainMessageView)}
+        statusLabel={chatStatusLabel}
+        isLive={brainReady}
+        disabled={!brainReady}
+      />
 
       <article className="rounded-lg border border-border bg-bg-surface p-6">
         <h2 className="text-lg font-semibold">最新今日行动计划</h2>
         <p className="mt-3 whitespace-pre-wrap text-sm text-text-secondary">{latestDailyPlan?.body ?? "尚未生成。"}</p>
-      </article>
-
-      <article className="rounded-lg border border-border bg-bg-surface p-6">
-        <h2 className="text-lg font-semibold">最近消息</h2>
-        {messages.length === 0 ? (
-          <p className="mt-3 text-sm text-text-secondary">暂无消息记录。</p>
-        ) : (
-          <div className="mt-3 space-y-3">
-            {messages.map((msg) => (
-              <div key={msg.id} className="rounded-md border border-border bg-bg-elevated p-3">
-                <p className="text-xs text-text-secondary">{msg.role === "user" ? "我" : "大脑"} · {formatDateTime(msg.createdAt)}</p>
-                <p className="mt-1 text-sm">{msg.content}</p>
-              </div>
-            ))}
-          </div>
-        )}
       </article>
     </section>
   );

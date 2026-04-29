@@ -23,6 +23,9 @@ Environment=HERMES_BRIDGE_TIMEOUT_SECONDS=60
 Environment=HERMES_BRIDGE_SKIP_MEMORY=false
 Environment=HERMES_BRIDGE_SKIP_CONTEXT_FILES=false
 Environment=HERMES_BRIDGE_ALLOW_DIRECT_FALLBACK=true
+# When Compass sends attachments, direct fallback can pass image_url payloads to
+# the model. If the model rejects images, bridge retries with text metadata only.
+Environment=HERMES_BRIDGE_DIRECT_FOR_ATTACHMENTS=true
 Environment=HERMES_BRIDGE_FALLBACK_BASE_URL=https://api.deepseek.com
 Environment=HERMES_BRIDGE_FALLBACK_MODEL=deepseek-v4-flash
 Environment=HERMES_AGENT_PROVIDER=deepseek

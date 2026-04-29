@@ -1,4 +1,5 @@
 import asyncio
+import copy
 import json
 import os
 import urllib.error
@@ -36,14 +37,14 @@ def require_token(authorization: str | None) -> None:
         return
     expected_header = f"Bearer {expected}"
     if authorization != expected_header:
-        raise HTTPException(status_code=401, detail="????bridge token ????")
+        raise HTTPException(status_code=401, detail="未授权：bridge token 校验失败")
 
 
 def build_agent() -> Any:
     try:
         from run_agent import AIAgent
     except Exception as exc:  # noqa: BLE001
-        raise RuntimeError("???? Hermes AIAgent???? bridge ??? Hermes ??????") from exc
+        raise RuntimeError("无法导入 Hermes AIAgent，请确认 bridge 运行在 Hermes Python 环境中。") from exc
 
     kwargs: dict[str, Any] = {
         "quiet_mode": True,
@@ -65,32 +66,55 @@ def build_agent() -> Any:
     return AIAgent(**kwargs)
 
 
+def context_has_attachments(context: dict[str, Any]) -> bool:
+    attachments = context.get("attachments")
+    return isinstance(attachments, list) and len(attachments) > 0
+
+
+def scrub_context_for_prompt(context: dict[str, Any]) -> dict[str, Any]:
+    safe_context = copy.deepcopy(context)
+    attachments = safe_context.get("attachments")
+    if isinstance(attachments, list):
+        for attachment in attachments:
+            if isinstance(attachment, dict):
+                attachment.pop("dataUrl", None)
+    return safe_context
+
+
+def image_parts_from_context(context: dict[str, Any]) -> list[dict[str, Any]]:
+    parts: list[dict[str, Any]] = []
+    attachments = context.get("attachments")
+    if not isinstance(attachments, list):
+        return parts
+    for attachment in attachments:
+        if not isinstance(attachment, dict):
+            continue
+        data_url = attachment.get("dataUrl")
+        kind = attachment.get("kind")
+        if kind == "image" and isinstance(data_url, str) and data_url.startswith("data:image/"):
+            parts.append({"type": "image_url", "image_url": {"url": data_url}})
+    return parts
+
+
 def build_prompt(message: str, context: dict[str, Any]) -> str:
     if not context:
         return message
-    context_text = json.dumps(context, ensure_ascii=False, default=str)
+    context_text = json.dumps(scrub_context_for_prompt(context), ensure_ascii=False, default=str)
     return f"{message}\n\n[Compass context]\n{context_text}"
 
 
-def call_direct_fallback(message: str, context: dict[str, Any]) -> str:
-    api_key = os.getenv("HERMES_BRIDGE_FALLBACK_API_KEY") or os.getenv("DEEPSEEK_API_KEY")
-    if not api_key:
-        raise RuntimeError("Hermes ?????????? HERMES_BRIDGE_FALLBACK_API_KEY/DEEPSEEK_API_KEY")
+def parse_chat_completion(data: dict[str, Any]) -> str:
+    choice = (data.get("choices") or [{}])[0]
+    message_data = choice.get("message") or {}
+    text = (message_data.get("content") or "").strip()
+    if not text:
+        text = (message_data.get("reasoning_content") or "").strip()
+    if not text:
+        raise RuntimeError("fallback 没有返回可读文本")
+    return text
 
-    base_url = (os.getenv("HERMES_BRIDGE_FALLBACK_BASE_URL") or os.getenv("DEEPSEEK_BASE_URL") or "https://api.deepseek.com").rstrip("/")
-    model = os.getenv("HERMES_BRIDGE_FALLBACK_MODEL") or os.getenv("DEEPSEEK_MODEL") or "deepseek-v4-flash"
-    payload = {
-        "model": model,
-        "messages": [
-            {
-                "role": "system",
-                "content": "?? Compass ??????????????????????????? Compass ???????????????",
-            },
-            {"role": "user", "content": build_prompt(message, context)},
-        ],
-        "temperature": 0.3,
-        "max_tokens": int(os.getenv("HERMES_BRIDGE_FALLBACK_MAX_TOKENS", "2048")),
-    }
+
+def post_chat_completion(base_url: str, api_key: str, payload: dict[str, Any]) -> str:
     req = urllib.request.Request(
         f"{base_url}/chat/completions",
         data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
@@ -98,24 +122,55 @@ def call_direct_fallback(message: str, context: dict[str, Any]) -> str:
         method="POST",
     )
 
+    with urllib.request.urlopen(req, timeout=float(os.getenv("HERMES_BRIDGE_FALLBACK_TIMEOUT", "90"))) as response:
+        data = json.loads(response.read().decode("utf-8"))
+    return parse_chat_completion(data)
+
+
+def call_direct_fallback(message: str, context: dict[str, Any]) -> str:
+    api_key = os.getenv("HERMES_BRIDGE_FALLBACK_API_KEY") or os.getenv("DEEPSEEK_API_KEY")
+    if not api_key:
+        raise RuntimeError("Hermes fallback 缺少 HERMES_BRIDGE_FALLBACK_API_KEY/DEEPSEEK_API_KEY")
+
+    base_url = (os.getenv("HERMES_BRIDGE_FALLBACK_BASE_URL") or os.getenv("DEEPSEEK_BASE_URL") or "https://api.deepseek.com").rstrip("/")
+    model = os.getenv("HERMES_BRIDGE_FALLBACK_MODEL") or os.getenv("DEEPSEEK_MODEL") or "deepseek-v4-flash"
+    prompt = build_prompt(message, context)
+    image_parts = image_parts_from_context(context)
+    user_content: str | list[dict[str, Any]] = prompt
+    if image_parts:
+        user_content = [{"type": "text", "text": prompt}, *image_parts]
+
+    payload = {
+        "model": model,
+        "messages": [
+            {
+                "role": "system",
+                "content": "你是 Compass 的个人成长大脑。请基于 Compass 上下文、用户输入和附件给出具体、可执行的中文回复。",
+            },
+            {"role": "user", "content": user_content},
+        ],
+        "temperature": 0.3,
+        "max_tokens": int(os.getenv("HERMES_BRIDGE_FALLBACK_MAX_TOKENS", "2048")),
+    }
+
     try:
-        with urllib.request.urlopen(req, timeout=float(os.getenv("HERMES_BRIDGE_FALLBACK_TIMEOUT", "90"))) as response:
-            data = json.loads(response.read().decode("utf-8"))
+        return post_chat_completion(base_url, api_key, payload)
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", "replace")[:500]
-        raise RuntimeError(f"fallback ?? HTTP {exc.code}: {body}") from exc
-
-    choice = (data.get("choices") or [{}])[0]
-    message_data = choice.get("message") or {}
-    text = (message_data.get("content") or "").strip()
-    if not text:
-        text = (message_data.get("reasoning_content") or "").strip()
-    if not text:
-        raise RuntimeError("fallback ??????????")
-    return text
+        if not image_parts:
+            raise RuntimeError(f"fallback 返回 HTTP {exc.code}: {body}") from exc
+        payload["messages"][-1]["content"] = prompt
+        try:
+            return post_chat_completion(base_url, api_key, payload)
+        except urllib.error.HTTPError as retry_exc:
+            retry_body = retry_exc.read().decode("utf-8", "replace")[:500]
+            raise RuntimeError(f"fallback 返回 HTTP {retry_exc.code}: {retry_body}") from retry_exc
 
 
 def run_agent_sync(message: str, context: dict[str, Any]) -> tuple[str, str]:
+    if parse_bool_env("HERMES_BRIDGE_DIRECT_FOR_ATTACHMENTS", False) and context_has_attachments(context):
+        return call_direct_fallback(message, context), "deepseek-direct-attachments"
+
     prompt = build_prompt(message, context)
 
     try:
@@ -131,12 +186,12 @@ def run_agent_sync(message: str, context: dict[str, Any]) -> tuple[str, str]:
     except Exception as exc:  # noqa: BLE001
         if not parse_bool_env("HERMES_BRIDGE_ALLOW_DIRECT_FALLBACK", True):
             raise
-        print(f"Hermes Python ??????? fallback: {exc}", flush=True)
+        print(f"Hermes Python 调用失败，使用 fallback: {exc}", flush=True)
 
     if parse_bool_env("HERMES_BRIDGE_ALLOW_DIRECT_FALLBACK", True):
         return call_direct_fallback(message, context), "deepseek-direct-fallback"
 
-    raise RuntimeError("Hermes ????????")
+    raise RuntimeError("Hermes 没有返回可用回复")
 
 
 @app.get("/health")
@@ -158,7 +213,7 @@ async def chat(req: ChatRequest, authorization: str | None = Header(default=None
     except HTTPException:
         raise
     except TimeoutError as exc:
-        raise HTTPException(status_code=504, detail="?? Hermes ?????????") from exc
+        raise HTTPException(status_code=504, detail="调用 Hermes 超时，请稍后再试。") from exc
     except Exception as exc:  # noqa: BLE001
-        detail = str(exc) if str(exc) else "?? Hermes ?????? bridge ???"
-        raise HTTPException(status_code=500, detail=f"Hermes Bridge ???{detail}") from exc
+        detail = str(exc) if str(exc) else "调用 Hermes 失败，请检查 bridge 日志。"
+        raise HTTPException(status_code=500, detail=f"Hermes Bridge 错误：{detail}") from exc
