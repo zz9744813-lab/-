@@ -3,9 +3,6 @@ import { and, count, desc, eq, gte } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { captures, goals, habitLogs, habits, insights, journalEntries, reviews } from "@/lib/db/schema";
 
-
-export const dynamic = "force-dynamic";
-
 function startOfWeekDateString() {
   const now = new Date();
   const day = now.getDay();

@@ -7,7 +7,7 @@ export const captures = sqliteTable("captures", {
   source: text("source").notNull().default("web"),
   dimension: text("dimension"),
   status: text("status").notNull().default("inbox"),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const goals = sqliteTable("goals", {
@@ -18,8 +18,8 @@ export const goals = sqliteTable("goals", {
   progress: integer("progress").notNull().default(0),
   targetDate: integer("target_date", { mode: "timestamp" }),
   status: text("status").notNull().default("active"),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const habits = sqliteTable("habits", {
@@ -28,7 +28,7 @@ export const habits = sqliteTable("habits", {
   frequency: text("frequency").notNull().default("daily"),
   goalId: text("goal_id"),
   status: text("status").notNull().default("active"),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const habitLogs = sqliteTable("habit_logs", {
@@ -37,7 +37,7 @@ export const habitLogs = sqliteTable("habit_logs", {
   date: text("date").notNull(),
   completed: integer("completed", { mode: "boolean" }).notNull().default(true),
   note: text("note"),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const journalEntries = sqliteTable("journal_entries", {
@@ -47,8 +47,8 @@ export const journalEntries = sqliteTable("journal_entries", {
   mood: integer("mood"),
   content: text("content").notNull(),
   tags: text("tags"),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const notes = sqliteTable("notes", {
@@ -56,8 +56,8 @@ export const notes = sqliteTable("notes", {
   title: text("title").notNull(),
   content: text("content").notNull(),
   tags: text("tags"),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const financeSnapshots = sqliteTable("finance_snapshots", {
@@ -68,7 +68,7 @@ export const financeSnapshots = sqliteTable("finance_snapshots", {
   investments: real("investments").notNull().default(0),
   debt: real("debt").notNull().default(0),
   note: text("note"),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const financeTransactions = sqliteTable("finance_transactions", {
@@ -78,7 +78,7 @@ export const financeTransactions = sqliteTable("finance_transactions", {
   category: text("category"),
   note: text("note"),
   date: text("date").notNull(),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const reviews = sqliteTable("reviews", {
@@ -89,7 +89,7 @@ export const reviews = sqliteTable("reviews", {
   title: text("title").notNull(),
   body: text("body").notNull(),
   source: text("source").notNull().default("hermes"),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const hermesMessages = sqliteTable("hermes_messages", {
@@ -99,7 +99,7 @@ export const hermesMessages = sqliteTable("hermes_messages", {
   content: text("content").notNull(),
   toolCall: text("tool_call"),
   source: text("source").notNull(),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const insights = sqliteTable("insights", {
@@ -110,7 +110,7 @@ export const insights = sqliteTable("insights", {
   evidence: text("evidence"),
   confidence: real("confidence"),
   acknowledgedByUser: integer("acknowledged_by_user", { mode: "boolean" }).notNull().default(false),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const skillsCache = sqliteTable("skills_cache", {
@@ -119,13 +119,13 @@ export const skillsCache = sqliteTable("skills_cache", {
   description: text("description"),
   useCount: integer("use_count").notNull().default(0),
   createdAt: integer("created_at", { mode: "timestamp" }),
-  syncedAt: integer("synced_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  syncedAt: integer("synced_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const appSettings = sqliteTable("app_settings", {
   key: text("key").primaryKey(),
   value: text("value"),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
 
@@ -137,7 +137,7 @@ export const duolingoSnapshots = sqliteTable("duolingo_snapshots", {
   currentCourseId: text("current_course_id"),
   coursesJson: text("courses_json"),
   rawJson: text("raw_json"),
-  syncedAt: integer("synced_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  syncedAt: integer("synced_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const duolingoXpEvents = sqliteTable("duolingo_xp_events", {
