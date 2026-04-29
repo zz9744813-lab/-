@@ -22,6 +22,16 @@ Environment=HERMES_BRIDGE_TOKEN=
 Environment=HERMES_BRIDGE_TIMEOUT_SECONDS=60
 Environment=HERMES_BRIDGE_SKIP_MEMORY=false
 Environment=HERMES_BRIDGE_SKIP_CONTEXT_FILES=false
+Environment=HERMES_BRIDGE_ALLOW_DIRECT_FALLBACK=true
+Environment=HERMES_BRIDGE_FALLBACK_BASE_URL=https://api.deepseek.com
+Environment=HERMES_BRIDGE_FALLBACK_MODEL=deepseek-v4-flash
+Environment=HERMES_AGENT_PROVIDER=deepseek
+Environment=HERMES_AGENT_BASE_URL=https://api.deepseek.com
+Environment=HERMES_AGENT_MODEL=deepseek-v4-flash
+# Optional: pass the key directly into AIAgent if Hermes config/env loading is unavailable.
+Environment=HERMES_AGENT_API_KEY=
+# Put the real key only in /etc/systemd/system/hermes-bridge.service, not in git.
+Environment=HERMES_BRIDGE_FALLBACK_API_KEY=
 
 Restart=on-failure
 RestartSec=3

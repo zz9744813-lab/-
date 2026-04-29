@@ -5,6 +5,7 @@ import { getCompassBrainContext } from "@/lib/brain/context";
 import { loadBrainConfigFromStore } from "@/lib/brain/settings-store";
 import { db } from "@/lib/db/client";
 import { hermesMessages, insights } from "@/lib/db/schema";
+import { formatDateTime } from "@/lib/datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -152,7 +153,7 @@ export default async function BrainPage() {
           <div className="mt-3 space-y-3">
             {messages.map((msg) => (
               <div key={msg.id} className="rounded-md border border-border bg-bg-elevated p-3">
-                <p className="text-xs text-text-secondary">{msg.role === "user" ? "我" : "大脑"} · {msg.createdAt.toISOString().replace("T", " ").slice(0, 16)}</p>
+                <p className="text-xs text-text-secondary">{msg.role === "user" ? "我" : "大脑"} · {formatDateTime(msg.createdAt)}</p>
                 <p className="mt-1 text-sm">{msg.content}</p>
               </div>
             ))}
