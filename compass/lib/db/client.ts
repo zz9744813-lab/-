@@ -15,7 +15,6 @@ if (dbDir && dbDir !== ".") {
   fs.mkdirSync(dbDir, { recursive: true });
 }
 const sqlite = new Database(dbPath);
-sqlite.pragma("journal_mode = WAL");
 
 sqlite.exec(`
 CREATE TABLE IF NOT EXISTS captures (
@@ -24,7 +23,7 @@ CREATE TABLE IF NOT EXISTS captures (
   source TEXT NOT NULL DEFAULT 'web',
   dimension TEXT,
   status TEXT NOT NULL DEFAULT 'inbox',
-  created_at INTEGER NOT NULL DEFAULT (unixepoch())
+  created_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS goals (
   id TEXT PRIMARY KEY NOT NULL,
@@ -34,8 +33,8 @@ CREATE TABLE IF NOT EXISTS goals (
   progress INTEGER NOT NULL DEFAULT 0,
   target_date INTEGER,
   status TEXT NOT NULL DEFAULT 'active',
-  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
-  updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+  created_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS habits (
   id TEXT PRIMARY KEY NOT NULL,
@@ -43,7 +42,7 @@ CREATE TABLE IF NOT EXISTS habits (
   frequency TEXT NOT NULL DEFAULT 'daily',
   goal_id TEXT,
   status TEXT NOT NULL DEFAULT 'active',
-  created_at INTEGER NOT NULL DEFAULT (unixepoch())
+  created_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS habit_logs (
   id TEXT PRIMARY KEY NOT NULL,
@@ -51,7 +50,7 @@ CREATE TABLE IF NOT EXISTS habit_logs (
   date TEXT NOT NULL,
   completed INTEGER NOT NULL DEFAULT 1,
   note TEXT,
-  created_at INTEGER NOT NULL DEFAULT (unixepoch())
+  created_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS journal_entries (
   id TEXT PRIMARY KEY NOT NULL,
@@ -60,35 +59,8 @@ CREATE TABLE IF NOT EXISTS journal_entries (
   mood INTEGER,
   content TEXT NOT NULL,
   tags TEXT,
-  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
-  updated_at INTEGER NOT NULL DEFAULT (unixepoch())
-);
-CREATE TABLE IF NOT EXISTS notes (
-  id TEXT PRIMARY KEY NOT NULL,
-  title TEXT NOT NULL,
-  content TEXT NOT NULL,
-  tags TEXT,
-  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
-  updated_at INTEGER NOT NULL DEFAULT (unixepoch())
-);
-CREATE TABLE IF NOT EXISTS finance_snapshots (
-  id TEXT PRIMARY KEY NOT NULL,
-  date TEXT NOT NULL,
-  net_worth REAL NOT NULL DEFAULT 0,
-  cash REAL NOT NULL DEFAULT 0,
-  investments REAL NOT NULL DEFAULT 0,
-  debt REAL NOT NULL DEFAULT 0,
-  note TEXT,
-  created_at INTEGER NOT NULL DEFAULT (unixepoch())
-);
-CREATE TABLE IF NOT EXISTS finance_transactions (
-  id TEXT PRIMARY KEY NOT NULL,
-  type TEXT NOT NULL,
-  amount REAL NOT NULL DEFAULT 0,
-  category TEXT,
-  note TEXT,
-  date TEXT NOT NULL,
-  created_at INTEGER NOT NULL DEFAULT (unixepoch())
+  created_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS reviews (
   id TEXT PRIMARY KEY NOT NULL,
@@ -98,7 +70,7 @@ CREATE TABLE IF NOT EXISTS reviews (
   title TEXT NOT NULL,
   body TEXT NOT NULL,
   source TEXT NOT NULL DEFAULT 'hermes',
-  created_at INTEGER NOT NULL DEFAULT (unixepoch())
+  created_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS hermes_messages (
   id TEXT PRIMARY KEY NOT NULL,
@@ -107,7 +79,7 @@ CREATE TABLE IF NOT EXISTS hermes_messages (
   content TEXT NOT NULL,
   tool_call TEXT,
   source TEXT NOT NULL,
-  created_at INTEGER NOT NULL DEFAULT (unixepoch())
+  created_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS insights (
   id TEXT PRIMARY KEY NOT NULL,
@@ -117,21 +89,23 @@ CREATE TABLE IF NOT EXISTS insights (
   evidence TEXT,
   confidence REAL,
   acknowledged_by_user INTEGER NOT NULL DEFAULT 0,
-  created_at INTEGER NOT NULL DEFAULT (unixepoch())
+  created_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-CREATE TABLE IF NOT EXISTS skills_cache (
+CREATE TABLE IF NOT EXISTS finance_transactions (
   id TEXT PRIMARY KEY NOT NULL,
-  name TEXT NOT NULL,
-  description TEXT,
-  use_count INTEGER NOT NULL DEFAULT 0,
-  created_at INTEGER,
-  synced_at INTEGER NOT NULL DEFAULT (unixepoch())
+  type TEXT NOT NULL,
+  amount REAL NOT NULL DEFAULT 0,
+  category TEXT,
+  note TEXT,
+  date TEXT NOT NULL,
+  created_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS app_settings (
   key TEXT PRIMARY KEY NOT NULL,
   value TEXT,
-  updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+  updated_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
 CREATE TABLE IF NOT EXISTS duolingo_snapshots (
   date TEXT PRIMARY KEY NOT NULL,
   streak INTEGER NOT NULL DEFAULT 0,
@@ -140,7 +114,7 @@ CREATE TABLE IF NOT EXISTS duolingo_snapshots (
   current_course_id TEXT,
   courses_json TEXT,
   raw_json TEXT,
-  synced_at INTEGER NOT NULL DEFAULT (unixepoch())
+  synced_at INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS duolingo_xp_events (
   id TEXT PRIMARY KEY NOT NULL,
@@ -170,64 +144,5 @@ function ensureColumn(table: string, column: string, definition: string) {
 }
 
 ensureColumn("journal_entries", "title", "TEXT");
-
-const timestampColumns: Record<string, string[]> = {
-  captures: ["created_at"],
-  goals: ["target_date", "created_at", "updated_at"],
-  habits: ["created_at"],
-  habit_logs: ["created_at"],
-  journal_entries: ["created_at", "updated_at"],
-  notes: ["created_at", "updated_at"],
-  finance_snapshots: ["created_at"],
-  finance_transactions: ["created_at"],
-  reviews: ["created_at"],
-  hermes_messages: ["created_at"],
-  insights: ["created_at"],
-  skills_cache: ["created_at", "synced_at"],
-  app_settings: ["updated_at"],
-  duolingo_snapshots: ["synced_at"],
-  duolingo_xp_events: ["event_time"],
-  duolingo_sync_log: ["started_at", "finished_at"],
-};
-
-function normalizeTimestampStorage() {
-  for (const [table, columns] of Object.entries(timestampColumns)) {
-    const existingColumns = sqlite.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string; notnull: number }>;
-    const existing = new Map(existingColumns.map((column) => [column.name, column]));
-
-    for (const column of columns) {
-      const info = existing.get(column);
-      if (!info) continue;
-      const fallback = info.notnull ? "unixepoch('now')" : "NULL";
-      sqlite.exec(`
-        UPDATE ${table}
-        SET ${column} = COALESCE(unixepoch(${column}), ${fallback})
-        WHERE ${column} IS NOT NULL AND typeof(${column}) = 'text';
-      `);
-
-      const triggerBase = `${table}_${column}`.replace(/[^a-zA-Z0-9_]/g, "_");
-      sqlite.exec(`
-        CREATE TRIGGER IF NOT EXISTS normalize_${triggerBase}_insert
-        AFTER INSERT ON ${table}
-        WHEN NEW.${column} IS NOT NULL AND typeof(NEW.${column}) = 'text'
-        BEGIN
-          UPDATE ${table}
-          SET ${column} = COALESCE(unixepoch(NEW.${column}), ${fallback})
-          WHERE rowid = NEW.rowid;
-        END;
-        CREATE TRIGGER IF NOT EXISTS normalize_${triggerBase}_update
-        AFTER UPDATE OF ${column} ON ${table}
-        WHEN NEW.${column} IS NOT NULL AND typeof(NEW.${column}) = 'text'
-        BEGIN
-          UPDATE ${table}
-          SET ${column} = COALESCE(unixepoch(NEW.${column}), ${fallback})
-          WHERE rowid = NEW.rowid;
-        END;
-      `);
-    }
-  }
-}
-
-normalizeTimestampStorage();
 
 export const db = drizzle(sqlite);

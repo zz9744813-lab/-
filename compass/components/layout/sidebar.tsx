@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Brain, BookOpen, Goal, House, Inbox, NotebookPen, PiggyBank, RotateCcw, ScrollText, Settings } from "lucide-react";
+import { Brain, Goal, House, Inbox, NotebookPen, PiggyBank, ScrollText, Settings } from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "总览", icon: House },
