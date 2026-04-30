@@ -32,18 +32,26 @@ export default async function InboxPage() {
         </h1>
       </div>
 
-      <form action={createCaptureAction} className="glass animate-fade-rise-delay flex flex-wrap items-end gap-3 p-4">
-        <input
-          name="rawText"
-          required
-          placeholder="写下需要后续处理的事项…"
-          className="glass-input flex-1 min-w-[260px] !py-2 text-sm"
-        />
-        <input name="dimension" placeholder="维度" className="glass-input w-32 !py-2 text-sm" />
-        <button type="submit" className="glass-btn glass-btn-primary !py-2 text-sm">
-          + 添加
-        </button>
-      </form>
+      <details className="glass animate-fade-rise-delay p-4 [&[open]>summary]:mb-3">
+        <summary className="cursor-pointer list-none text-sm text-text-secondary hover:text-text-primary">
+          <span className="inline-flex items-center gap-2">
+            <span className="rounded-full border border-white/15 px-2 py-0.5 text-xs">+</span>
+            手动加一条(快速记录用,也可以丢给 Hermes 让它分类)
+          </span>
+        </summary>
+        <form action={createCaptureAction} className="flex flex-wrap items-end gap-3">
+          <input
+            name="rawText"
+            required
+            placeholder="写下需要后续处理的事项…"
+            className="glass-input flex-1 min-w-[260px] !py-2 text-sm"
+          />
+          <input name="dimension" placeholder="维度" className="glass-input w-32 !py-2 text-sm" />
+          <button type="submit" className="glass-btn glass-btn-primary !py-2 text-sm">
+            保存
+          </button>
+        </form>
+      </details>
 
       <div className="animate-fade-rise-delay-2">
         <InboxTable rows={rows} />

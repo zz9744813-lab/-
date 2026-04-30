@@ -8,15 +8,67 @@ import { db } from "@/lib/db/client";
 import { hermesMessages } from "@/lib/db/schema";
 import { formatDateTime } from "@/lib/datetime";
 
-const SCHEDULE_HINT = [
-  "If the user is asking you to schedule items, plan their day, or extract events from uploaded files,",
-  "include a fenced JSON block in your reply with this exact shape:",
-  "```json",
-  '{"compassActions":[{"type":"create_schedule_item","title":"...","description":"...","date":"YYYY-MM-DD","startTime":"HH:mm","endTime":"HH:mm","priority":"low|medium|high","evidence":"why you scheduled this"}]}',
-  "```",
-  "Compass will only persist what's inside that JSON block. Keep startTime/endTime/description/evidence optional but recommended.",
-  "Date must be YYYY-MM-DD; time must be HH:mm. If the user did not ask for scheduling, omit the JSON block.",
-].join("\n");
+const COMPASS_ACTIONS_HINT = `
+[Compass write protocol]
+
+You are reasoning about the user's life. Compass is a structured data store
+behind you. Whenever the user's message or uploaded files contain content
+that belongs in a Compass module, append a fenced JSON block at the END of
+your reply describing what to persist. Compass parses ONLY this JSON block.
+
+Available action types:
+
+- create_schedule_item — calendar/task with date/time
+  fields: title (req), description, date (YYYY-MM-DD, req), startTime (HH:mm),
+          endTime (HH:mm), priority (low|medium|high), evidence
+
+- create_goal — long-running objective
+  fields: title (req), description, dimension (e.g. 学习/健康/工作),
+          targetDate (YYYY-MM-DD), status (active|completed|paused)
+
+- update_goal — modify an existing goal
+  fields: id (req), and any of: title, description, dimension, status,
+          targetDate, progress (0-100)
+
+- create_journal_entry — diary/reflection text
+  fields: content (req), title, date (YYYY-MM-DD, defaults to today),
+          mood (1-5), tags (array or comma-string)
+
+- update_journal_entry — edit an existing journal row
+  fields: id (req) + any of: title, content, date, mood, tags
+
+- create_finance_transaction — income or expense
+  fields: type (income|expense, req), amount (positive number, req),
+          date (YYYY-MM-DD), category, note
+
+- update_schedule_item / cancel_schedule_item
+  fields: id (req) + any updatable field
+
+- create_capture — quick inbox item the user wants to triage later
+  fields: rawText (req), dimension
+
+- save_insight — your own analytical observation about the user
+  fields: category (req), title (req), body (req), evidence, confidence (0-1)
+
+- save_review — periodic recap text
+  fields: period (req), title (req), body (req), startDate, endDate
+
+Required JSON shape (REPLY MUST END LIKE THIS WHEN PERSISTING):
+\`\`\`json
+{"compassActions":[
+  {"type":"create_finance_transaction","type_inner":"expense","amount":35.5,"category":"餐饮","date":"2026-04-30","note":"地铁站买的便当"},
+  {"type":"create_schedule_item","title":"复习日语 N3 第3课","date":"2026-05-02","startTime":"20:00","endTime":"21:00","priority":"medium","evidence":"用户上传的学习计划提到本周要复习 N3"}
+]}
+\`\`\`
+
+Rules:
+- Only emit the JSON block when there's data to persist. If the user is just
+  chatting or asking a question, omit it entirely.
+- Multiple actions in one block is fine. They run in order.
+- Use ISO dates and 24h times. Use the user's timezone implied by currentTime
+  in the context.
+- Do NOT echo back data Compass already has. Only emit NEW persistence intents.
+`.trim();
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -179,7 +231,7 @@ export async function POST(request: Request) {
       createdAt,
     });
 
-    const promptForBrain = `${userContent}\n\n[Compass scheduling protocol]\n${SCHEDULE_HINT}`;
+    const promptForBrain = `${userContent}\n\n${COMPASS_ACTIONS_HINT}`;
 
     const result = await sendBrainMessage(
       promptForBrain,

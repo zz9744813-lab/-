@@ -1,11 +1,11 @@
 import Link from "next/link";
-import { and, count, desc, eq, gte } from "drizzle-orm";
+import { and, count, desc, eq, gte, ne } from "drizzle-orm";
 import { BrainChatPanel, type BrainChatMessageView } from "@/components/brain/brain-chat-panel";
 import { LiveClock } from "@/components/dashboard/live-clock";
 import { getBrainStatus, probeBridgeHealth } from "@/lib/brain/client";
 import { loadBrainConfigFromStore } from "@/lib/brain/settings-store";
 import { db } from "@/lib/db/client";
-import { captures, goals, habitLogs, habits, hermesMessages, insights, journalEntries, reviews } from "@/lib/db/schema";
+import { captures, goals, hermesMessages, journalEntries, reviews, scheduleItems } from "@/lib/db/schema";
 import { formatDateTime } from "@/lib/datetime";
 
 export const dynamic = "force-dynamic";
@@ -33,26 +33,22 @@ export default async function DashboardPage() {
   const today = new Date().toISOString().slice(0, 10);
   const weekStart = startOfWeekDateString();
 
-  const [activeGoalsResult, activeHabitsResult, completedTodayResult, inboxResult, weeklyJournalResult] =
+  const [activeGoalsResult, todayScheduleResult, todayDoneResult, inboxResult, weeklyJournalResult] =
     await Promise.all([
       db.select({ value: count() }).from(goals).where(eq(goals.status, "active")),
-      db.select({ value: count() }).from(habits).where(eq(habits.status, "active")),
       db
         .select({ value: count() })
-        .from(habitLogs)
-        .innerJoin(habits, eq(habitLogs.habitId, habits.id))
-        .where(and(eq(habitLogs.date, today), eq(habitLogs.completed, true), eq(habits.status, "active"))),
+        .from(scheduleItems)
+        .where(and(eq(scheduleItems.date, today), ne(scheduleItems.status, "cancelled"))),
+      db
+        .select({ value: count() })
+        .from(scheduleItems)
+        .where(and(eq(scheduleItems.date, today), eq(scheduleItems.status, "done"))),
       db.select({ value: count() }).from(captures).where(eq(captures.status, "inbox")),
       db.select({ value: count() }).from(journalEntries).where(gte(journalEntries.date, weekStart)),
     ]);
 
   const [latestReview] = await db.select().from(reviews).orderBy(desc(reviews.createdAt)).limit(1);
-  const [latestDailyPlan] = await db
-    .select()
-    .from(insights)
-    .where(eq(insights.category, "daily_plan"))
-    .orderBy(desc(insights.createdAt))
-    .limit(1);
 
   const recentMessages = await db.select().from(hermesMessages).orderBy(desc(hermesMessages.createdAt)).limit(8);
   const config = await loadBrainConfigFromStore();
@@ -66,8 +62,8 @@ export default async function DashboardPage() {
       : `未连接 · ${health.reason}`;
 
   const activeGoals = activeGoalsResult[0]?.value ?? 0;
-  const habitTotal = activeHabitsResult[0]?.value ?? 0;
-  const habitDone = completedTodayResult[0]?.value ?? 0;
+  const scheduleTotal = todayScheduleResult[0]?.value ?? 0;
+  const scheduleDone = todayDoneResult[0]?.value ?? 0;
   const inboxCount = inboxResult[0]?.value ?? 0;
   const weekJournal = weeklyJournalResult[0]?.value ?? 0;
 
@@ -79,12 +75,12 @@ export default async function DashboardPage() {
     delay: string;
     isText?: boolean;
   }> = [
-    { href: "/goals", label: "活跃目标", value: String(activeGoals), hint: activeGoals === 0 ? "去创建第一个目标" : "管理你的目标", delay: "" },
-    { href: "/habits", label: "今日习惯", value: `${habitDone} / ${habitTotal}`, hint: habitTotal === 0 ? "添加一个日常动作" : "去打卡", delay: "animate-fade-rise-delay" },
+    { href: "/schedule", label: "今日日程", value: `${scheduleDone} / ${scheduleTotal}`, hint: scheduleTotal === 0 ? "和 Hermes 说一句让它排" : "已完成 / 总数", delay: "" },
+    { href: "/goals", label: "活跃目标", value: String(activeGoals), hint: activeGoals === 0 ? "和 Hermes 说说想达成什么" : "管理你的目标", delay: "animate-fade-rise-delay" },
     { href: "/inbox", label: "收件箱", value: String(inboxCount), hint: inboxCount === 0 ? "保持空箱状态" : "去清理", delay: "animate-fade-rise-delay-2" },
     { href: "/journal", label: "本周日记", value: String(weekJournal), hint: weekJournal === 0 ? "记录今天" : "继续写", delay: "" },
     { href: "/reviews", label: "最新复盘", value: latestReview ? "已生成" : "未生成", hint: latestReview?.title ?? "暂无复盘", delay: "animate-fade-rise-delay", isText: true },
-    { href: "/brain", label: "今日行动", value: latestDailyPlan ? "已生成" : "未生成", hint: latestDailyPlan?.title ?? "去大脑生成", delay: "animate-fade-rise-delay-2", isText: true },
+    { href: "/finance", label: "财务", value: "查看", hint: "本月收支", delay: "animate-fade-rise-delay-2", isText: true },
   ];
 
   return (

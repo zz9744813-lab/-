@@ -2,13 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Brain, CalendarClock, Goal, House, Inbox, NotebookPen, PiggyBank, RotateCcw, ScrollText, Settings } from "lucide-react";
+import { Brain, CalendarClock, Goal, House, Inbox, NotebookPen, PiggyBank, RotateCcw, Settings } from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "总览", icon: House },
   { href: "/schedule", label: "日程", icon: CalendarClock },
   { href: "/goals", label: "目标", icon: Goal },
-  { href: "/habits", label: "习惯", icon: ScrollText },
   { href: "/journal", label: "日记", icon: NotebookPen },
   { href: "/finance", label: "财务", icon: PiggyBank },
   { href: "/reviews", label: "复盘", icon: RotateCcw },
