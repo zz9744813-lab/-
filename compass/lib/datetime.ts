@@ -30,11 +30,11 @@ export function formatDateInput(value: DateLike): string {
   return coerceDate(value)?.toISOString().slice(0, 10) ?? "";
 }
 
-export function formatDate(value: DateLike, fallback = "???"): string {
+export function formatDate(value: DateLike, fallback = "未设置"): string {
   return formatDateInput(value) || fallback;
 }
 
-export function formatDateTime(value: DateLike, fallback = "????"): string {
+export function formatDateTime(value: DateLike, fallback = "未知时间"): string {
   const date = coerceDate(value);
   if (!date) return fallback;
   return date.toISOString().replace("T", " ").slice(0, 16);
