@@ -7,21 +7,22 @@
   --font-geist-mono: 'JetBrains Mono', 'SFMono-Regular', monospace;
   --font-fraunces: 'Instrument Serif', Georgia, 'Times New Roman', serif;
 
-  --bg-base: hsl(215 50% 8%);
-  --bg-surface: hsl(215 35% 12%);
-  --bg-elevated: hsl(215 30% 16%);
+  /* 基底偏蓝灰,比之前的近黑亮一档,玻璃层折射更明显 */
+  --bg-base: hsl(218 30% 14%);
+  --bg-surface: hsl(218 24% 18%);
+  --bg-elevated: hsl(218 22% 22%);
 
-  --border-subtle: hsla(0 0% 100% / 0.06);
-  --border-default: hsla(0 0% 100% / 0.10);
-  --border-strong: hsla(0 0% 100% / 0.18);
+  --border-subtle: hsla(0 0% 100% / 0.08);
+  --border-default: hsla(0 0% 100% / 0.13);
+  --border-strong: hsla(0 0% 100% / 0.22);
 
-  --text-primary: hsl(0 0% 98%);
-  --text-secondary: hsl(220 8% 70%);
-  --text-tertiary: hsl(220 8% 50%);
+  --text-primary: hsl(0 0% 99%);
+  --text-secondary: hsl(220 8% 78%);
+  --text-tertiary: hsl(220 8% 58%);
 
   --accent: #FF6B35;
-  --accent-muted: rgba(255, 107, 53, 0.14);
-  --accent-glow: rgba(255, 107, 53, 0.45);
+  --accent-muted: rgba(255, 107, 53, 0.18);
+  --accent-glow: rgba(255, 107, 53, 0.5);
 
   --success: #4ADE80;
   --warning: #FBBF24;
@@ -32,8 +33,8 @@ html, body {
   background: var(--bg-base);
   color: var(--text-primary);
   font-family: var(--font-geist-sans);
-  font-size: 14px;
-  line-height: 1.55;
+  font-size: 15px;
+  line-height: 1.6;
   min-height: 100vh;
 }
 
@@ -44,9 +45,9 @@ body::before {
   z-index: 0;
   pointer-events: none;
   background:
-    radial-gradient(circle at 18% 22%, rgba(255, 107, 53, 0.18), transparent 45%),
-    radial-gradient(circle at 82% 78%, rgba(80, 140, 255, 0.18), transparent 50%),
-    radial-gradient(circle at 50% 110%, rgba(160, 100, 255, 0.14), transparent 55%);
+    radial-gradient(circle at 18% 22%, rgba(255, 130, 80, 0.22), transparent 45%),
+    radial-gradient(circle at 82% 78%, rgba(110, 160, 255, 0.22), transparent 50%),
+    radial-gradient(circle at 50% 110%, rgba(180, 130, 255, 0.18), transparent 55%);
 }
 
 body > * {
@@ -63,17 +64,17 @@ body > * {
   position: relative;
   background: linear-gradient(
     135deg,
-    rgba(255, 255, 255, 0.06) 0%,
-    rgba(255, 255, 255, 0.02) 100%
+    rgba(255, 255, 255, 0.09) 0%,
+    rgba(255, 255, 255, 0.04) 100%
   );
-  backdrop-filter: blur(22px) saturate(140%);
-  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  backdrop-filter: blur(22px) saturate(150%);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
   border: 1px solid var(--border-default);
   border-radius: 14px;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.3),
-    0 8px 32px rgba(0, 0, 0, 0.35);
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.25),
+    0 8px 32px rgba(0, 0, 0, 0.28);
   overflow: hidden;
 }
 
@@ -123,13 +124,14 @@ body > * {
 }
 
 .glass-input {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.10);
   border-radius: 10px;
   padding: 10px 14px;
   color: var(--text-primary);
   transition: all 0.2s ease;
   width: 100%;
+  font-size: 14px;
 }
 .glass-input:focus {
   outline: none;
@@ -142,12 +144,12 @@ body > * {
 }
 
 .glass-btn {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 10px;
   padding: 9px 16px;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 14px;
   cursor: pointer;
   transition: all 0.2s ease;
   display: inline-flex;

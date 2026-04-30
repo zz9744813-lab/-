@@ -1,50 +1,26 @@
-import { desc, eq } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
-import { getBrainStatus, probeBridgeHealth, sendBrainMessage } from "@/lib/brain/client";
+import { desc } from "drizzle-orm";
+import { getBrainStatus, probeBridgeHealth } from "@/lib/brain/client";
 import { getCompassBrainContext } from "@/lib/brain/context";
 import { loadBrainConfigFromStore } from "@/lib/brain/settings-store";
 import { db } from "@/lib/db/client";
-import { hermesMessages, insights } from "@/lib/db/schema";
+import { hermesMessages } from "@/lib/db/schema";
 import { formatDateTime } from "@/lib/datetime";
 
 export const dynamic = "force-dynamic";
 
-async function testReadContext() {
-  "use server";
-  await getCompassBrainContext();
-  revalidatePath("/brain");
-}
-
-async function generateDailyPlan() {
-  "use server";
-
-  const config = await loadBrainConfigFromStore();
-  const context = await getCompassBrainContext();
-  const prompt = [
-    "你是 Compass 的个人成长大脑。请基于真实上下文生成今天最重要的 3 个行动。",
-    "要求：",
-    "- 不要泛泛而谈",
-    "- 每个行动必须可执行",
-    "- 优先考虑未完成习惯、活跃目标、收件箱待处理、最近日记",
-    "- 输出中文",
-    "- 格式：",
-    "  1. 今日最重要的事",
-    "  2. 三个行动",
-    "  3. 如果只能做一件事，做什么",
-  ].join("\n");
-
-  const result = await sendBrainMessage(prompt, { page: "brain", compass: context }, config);
-
-  await db.insert(insights).values({
-    category: "daily_plan",
-    title: "今日行动计划",
-    body: result.ok ? result.response : `生成失败：${result.error ?? "未知错误"}`,
-    evidence: JSON.stringify(context),
-    confidence: 0.7,
-  });
-
-  revalidatePath("/brain");
-  revalidatePath("/dashboard");
+function StatusPill({ ok, label }: { ok: boolean; label: string }) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs ${
+        ok
+          ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-200"
+          : "border-amber-400/40 bg-amber-500/15 text-amber-200"
+      }`}
+    >
+      <span className={`h-1.5 w-1.5 rounded-full ${ok ? "bg-emerald-400" : "bg-amber-400"}`} />
+      {label}
+    </span>
+  );
 }
 
 export default async function BrainPage() {
@@ -53,66 +29,77 @@ export default async function BrainPage() {
   const health = await probeBridgeHealth(config);
   const context = await getCompassBrainContext();
   const brainReady = status.provider === "hermes-bridge" && status.configured && health.reachable;
-  const healthLabel =
-    status.provider === "hermes-bridge"
-      ? health.reachable
-        ? `connected - ${health.latencyMs}ms`
-        : `unreachable - ${health.reason}`
-      : "disabled";
 
-  const recentMessages = await db.select().from(hermesMessages).orderBy(desc(hermesMessages.createdAt)).limit(10);
-  const [latestDailyPlan] = await db.select().from(insights).where(eq(insights.category, "daily_plan")).orderBy(desc(insights.createdAt)).limit(1);
+  const recentMessages = await db
+    .select()
+    .from(hermesMessages)
+    .orderBy(desc(hermesMessages.createdAt))
+    .limit(20);
+
+  const stats = [
+    { label: "目标", value: context.goals.length },
+    { label: "习惯", value: context.habits.length },
+    { label: "收件箱", value: context.inbox.length },
+    { label: "近期日记", value: context.journals.length },
+    { label: "Duolingo", value: context.duolingo ? "✓" : "—" },
+  ];
 
   return (
     <section className="space-y-6">
-      <h1 className="text-3xl font-semibold">大脑</h1>
+      <div className="animate-fade-rise">
+        <p className="text-sm text-text-secondary">Hermes 大脑只读视图</p>
+        <h1 className="mt-1 text-4xl tracking-tight" style={{ fontFamily: "var(--font-fraunces)" }}>
+          大脑
+        </h1>
+      </div>
 
-      <article className="rounded-lg border border-border bg-bg-surface p-6 text-sm text-text-secondary">
-        <p>当前模式：{status.provider}</p>
-        <p>配置状态：{status.configured ? "已配置" : "配置不完整"}</p>
-        {status.missingVars.length > 0 ? <p>缺失字段：{status.missingVars.join("、")}</p> : null}
-        <p className="mt-2">{status.statusText}</p>
-        <p className="mt-2">Bridge: {healthLabel}</p>
-        <p className="mt-2 text-text-tertiary">需要对话或上传文件 → 去「总览」页面的 Hermes 对话区域。</p>
+      {/* 状态条 */}
+      <article className="glass animate-fade-rise-delay flex flex-wrap items-center gap-3 p-5">
+        <StatusPill ok={brainReady} label={brainReady ? `已连接 · ${health.latencyMs}ms` : "未连接"} />
+        <span className="text-sm text-text-secondary">{status.statusText}</span>
+        {!health.reachable && (
+          <span className="text-xs text-text-tertiary">原因:{health.reason}</span>
+        )}
       </article>
 
-      <article className="rounded-lg border border-border bg-bg-surface p-6">
-        <h2 className="text-lg font-semibold">Hermes 大脑状态</h2>
-        <div className="mt-3 space-y-1 text-sm text-text-secondary">
-          <p>当前 provider：{status.provider}</p>
-          <p>Bridge live: {healthLabel}</p>
-          <p>是否读取到 Compass 上下文：{context ? "是" : "否"}</p>
-          <p>目标数量：{context.goals.length}</p>
-          <p>习惯数量：{context.habits.length}</p>
-          <p>收件箱数量：{context.inbox.length}</p>
-          <p>最近日记数量：{context.journals.length}</p>
-          <p>Duolingo 数据：{context.duolingo ? "有" : "无"}</p>
+      {/* Compass 上下文摘要 */}
+      <article className="glass animate-fade-rise-delay-2 p-5">
+        <p className="mb-3 text-xs uppercase tracking-wider text-text-tertiary">Compass 上下文(Hermes 实时可读)</p>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+          {stats.map((stat) => (
+            <div key={stat.label} className="rounded-lg border border-white/5 bg-white/5 px-3 py-2.5">
+              <p className="text-xs text-text-tertiary">{stat.label}</p>
+              <p className="mt-1 font-mono text-lg tabular-nums">{stat.value}</p>
+            </div>
+          ))}
         </div>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <form action={testReadContext}>
-            <button type="submit" className="rounded-md border border-border px-4 py-2 text-sm">测试读取上下文</button>
-          </form>
-          <form action={generateDailyPlan}>
-            <button type="submit" disabled={!brainReady} className="rounded-md border border-accent bg-accent-muted px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50">生成今日行动计划</button>
-          </form>
-        </div>
+        <p className="mt-4 text-xs text-text-tertiary">
+          想触发对话或安排日程,去 <span className="text-text-secondary">总览</span> 页底部的 Hermes 对话区。
+        </p>
       </article>
 
-      <article className="rounded-lg border border-border bg-bg-surface p-6">
-        <h2 className="text-lg font-semibold">最新今日行动计划</h2>
-        <p className="mt-3 whitespace-pre-wrap text-sm text-text-secondary">{latestDailyPlan?.body ?? "尚未生成。"}</p>
-      </article>
-
-      <article className="rounded-lg border border-border bg-bg-surface p-6">
-        <h2 className="text-lg font-semibold">最近消息</h2>
+      {/* 最近消息 */}
+      <article className="glass animate-fade-rise-delay-2 p-5">
+        <p className="mb-3 text-xs uppercase tracking-wider text-text-tertiary">最近对话</p>
         {recentMessages.length === 0 ? (
-          <p className="mt-3 text-sm text-text-secondary">暂无对话记录。去总览发起一段对话。</p>
+          <p className="text-sm text-text-secondary">暂无对话记录。</p>
         ) : (
-          <ul className="mt-3 space-y-2 text-sm">
+          <ul className="space-y-2">
             {recentMessages.map((msg) => (
-              <li key={msg.id} className="rounded-md border border-border-subtle p-3">
-                <p className="text-xs text-text-tertiary">{msg.role === "user" ? "我" : "Hermes"} · {formatDateTime(msg.createdAt)}</p>
-                <p className="mt-1 line-clamp-3 text-text-primary">{msg.content}</p>
+              <li
+                key={msg.id}
+                className={`rounded-lg border border-white/5 p-3 text-sm ${
+                  msg.role === "user" ? "bg-white/[0.04]" : "bg-orange-500/[0.06]"
+                }`}
+              >
+                <div className="mb-1 flex items-center gap-2 text-xs text-text-tertiary">
+                  <span className="font-medium text-text-secondary">
+                    {msg.role === "user" ? "我" : "Hermes"}
+                  </span>
+                  <span>·</span>
+                  <span className="font-mono">{formatDateTime(msg.createdAt)}</span>
+                </div>
+                <p className="line-clamp-3 whitespace-pre-wrap text-text-primary">{msg.content}</p>
               </li>
             ))}
           </ul>
