@@ -21,7 +21,7 @@ export function normalizeBrainConfig(raw?: Partial<BrainRuntimeConfig>): BrainRu
 
 export type BridgeHealth =
   | { reachable: true; service: string; latencyMs: number }
-  | { reachable: false; reason: string };
+  | { reachable: false; reason: string; debugReason?: string; url?: string };
 
 export async function probeBridgeHealth(configInput?: Partial<BrainRuntimeConfig>): Promise<BridgeHealth> {
   const config = normalizeBrainConfig(configInput);
@@ -29,7 +29,7 @@ export async function probeBridgeHealth(configInput?: Partial<BrainRuntimeConfig
     return { reachable: false, reason: "未启用 hermes-bridge" };
   }
   if (!config.hermesBridgeUrl || config.hermesBridgeUrl.trim() === "") {
-    return { reachable: false, reason: "未配置 URL" };
+    return { reachable: false, reason: "未配置 Hermes Bridge URL" };
   }
 
   const url = `${config.hermesBridgeUrl.replace(/\/$/, "")}/health`;
@@ -39,19 +39,29 @@ export async function probeBridgeHealth(configInput?: Partial<BrainRuntimeConfig
 
   try {
     const response = await fetch(url, { method: "GET", signal: controller.signal });
+    if (response.status === 401) {
+      return { reachable: false, reason: "token 校验失败", debugReason: "HTTP 401", url: config.hermesBridgeUrl };
+    }
+    if (response.status === 404) {
+      return { reachable: false, reason: "bridge 地址不对（/health 返回 404）", debugReason: "HTTP 404", url: config.hermesBridgeUrl };
+    }
     if (!response.ok) {
-      return { reachable: false, reason: `HTTP ${response.status}` };
+      return { reachable: false, reason: `bridge 返回 HTTP ${response.status}`, debugReason: `HTTP ${response.status}`, url: config.hermesBridgeUrl };
     }
     const payload = (await response.json().catch(() => ({}))) as { ok?: boolean; service?: string };
     if (!payload.ok) {
-      return { reachable: false, reason: "bridge 返回 ok=false" };
+      return { reachable: false, reason: "bridge 返回 ok=false", url: config.hermesBridgeUrl };
     }
     return { reachable: true, service: payload.service ?? "hermes-bridge", latencyMs: Date.now() - startedAt };
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
-      return { reachable: false, reason: "探测超时（5 秒）" };
+      return { reachable: false, reason: "探测超时（5 秒）", debugReason: "AbortError", url: config.hermesBridgeUrl };
     }
-    return { reachable: false, reason: error instanceof Error ? error.message : "未知错误" };
+    const msg = error instanceof Error ? error.message : String(error);
+    if (msg.includes("fetch failed") || msg.includes("ECONNREFUSED") || msg.includes("Failed to fetch")) {
+      return { reachable: false, reason: "无法连接 Hermes Bridge", debugReason: msg, url: config.hermesBridgeUrl };
+    }
+    return { reachable: false, reason: `连接异常: ${msg}`, debugReason: msg, url: config.hermesBridgeUrl };
   } finally {
     clearTimeout(timeout);
   }
@@ -124,7 +134,11 @@ async function callHermesBridge(
     if (error instanceof Error && error.name === "AbortError") {
       return { ok: false, error: "Hermes Bridge 请求超时（60 秒）" };
     }
-    return { ok: false, error: error instanceof Error ? error.message : "未知错误" };
+    const msg = error instanceof Error ? error.message : String(error);
+    if (msg.includes("fetch failed") || msg.includes("ECONNREFUSED")) {
+      return { ok: false, error: "无法连接 Hermes Bridge，请确认服务已启动。" };
+    }
+    return { ok: false, error: `调用失败: ${msg}` };
   } finally {
     clearTimeout(timeout);
   }

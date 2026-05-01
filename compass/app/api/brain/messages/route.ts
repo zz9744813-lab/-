@@ -7,13 +7,12 @@ import { formatDateTime } from "@/lib/datetime";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-function attachmentsFromToolCall(value: string | null) {
-  if (!value) return [];
+function parseToolCall(value: string | null): { attachments?: unknown[]; compassActions?: unknown[]; provider?: string; ok?: boolean } {
+  if (!value) return {};
   try {
-    const parsed = JSON.parse(value) as { attachments?: unknown };
-    return Array.isArray(parsed.attachments) ? parsed.attachments : [];
+    return JSON.parse(value);
   } catch {
-    return [];
+    return {};
   }
 }
 
@@ -26,13 +25,19 @@ export async function GET(request: Request) {
   const messages = rows
     .slice()
     .reverse()
-    .map((row) => ({
-      id: row.id,
-      role: row.role === "user" ? "user" : "assistant",
-      content: row.content,
-      createdAt: formatDateTime(row.createdAt),
-      attachments: attachmentsFromToolCall(row.toolCall),
-    }));
+    .map((row) => {
+      const tc = parseToolCall(row.toolCall);
+      return {
+        id: row.id,
+        role: row.role === "user" ? "user" : "assistant",
+        content: row.content,
+        createdAt: formatDateTime(row.createdAt),
+        attachments: Array.isArray(tc.attachments) ? tc.attachments : [],
+        compassActions: Array.isArray(tc.compassActions) ? tc.compassActions : [],
+        provider: tc.provider ?? null,
+        bridgeOk: tc.ok ?? null,
+      };
+    });
 
   return NextResponse.json({ ok: true, messages });
 }

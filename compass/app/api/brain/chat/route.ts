@@ -513,6 +513,7 @@ export async function POST(request: Request) {
           content: assistantContent,
           createdAt: formatDateTime(assistantCreatedAt),
           attachments: [],
+          compassActions: actionResults,
         },
         compassActions: actionResults,
       },

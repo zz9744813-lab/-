@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
-import { FileText, ImagePlus, Loader2, Paperclip, Send, Sparkles, UploadCloud, X } from "lucide-react";
+import { FileText, ImagePlus, Loader2, Paperclip, Send, Sparkles, UploadCloud, X, RefreshCw, Settings, ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
 
 export type BrainChatAttachmentView = {
   id?: string;
@@ -13,12 +13,36 @@ export type BrainChatAttachmentView = {
   warning?: string;
 };
 
+export type BrainChatCompassAction = {
+  type: string;
+  ok: boolean;
+  result?: unknown;
+  error?: string;
+};
+
 export type BrainChatMessageView = {
   id: string;
   role: "user" | "assistant";
   content: string;
   createdAt: string;
   attachments?: BrainChatAttachmentView[];
+  compassActions?: BrainChatCompassAction[];
+  provider?: string | null;
+  bridgeOk?: boolean | null;
+};
+
+type DiagnosticsResult = {
+  ok: boolean;
+  provider: string;
+  hermesBridgeUrl: string | null;
+  hasToken: boolean;
+  configured: boolean;
+  reachable: boolean;
+  reason: string | null;
+  debugReason: string | null;
+  latencyMs: number | null;
+  service: string | null;
+  recommendations: string[];
 };
 
 type BrainChatPanelProps = {
@@ -56,6 +80,119 @@ function fileToAttachment(file: File): BrainChatAttachmentView {
   };
 }
 
+function CompassActionsSummary({ actions }: { actions: BrainChatCompassAction[] }) {
+  if (!actions || actions.length === 0) return null;
+  const ok = actions.filter((a) => a.ok);
+  const failed = actions.filter((a) => !a.ok);
+  if (ok.length === 0 && failed.length === 0) return null;
+
+  const labels: Record<string, string> = {
+    create_goal: "目标",
+    create_schedule_item: "日程",
+    update_schedule_item: "日程更新",
+    create_journal_entry: "日记",
+    create_capture: "收件箱",
+    save_review: "复盘记忆",
+    save_insight: "洞察",
+  };
+
+  const counts = new Map<string, number>();
+  for (const a of ok) {
+    const label = labels[a.type] ?? a.type;
+    counts.set(label, (counts.get(label) ?? 0) + 1);
+  }
+  const summary = Array.from(counts.entries()).map(([label, count]) => `${label} × ${count}`).join("、");
+
+  return (
+    <div className="mt-2 rounded-md border border-emerald-400/20 bg-emerald-500/5 px-3 py-2 text-xs text-emerald-200">
+      {summary && <span>已写入：{summary}</span>}
+      {failed.length > 0 && <span className="text-red-300 ml-2">失败 {failed.length} 项</span>}
+    </div>
+  );
+}
+
+function OfflineDiagnostics({ onRetry }: { onRetry: () => void }) {
+  const [diag, setDiag] = useState<DiagnosticsResult | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+
+  const loadDiagnostics = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/brain/diagnostics");
+      const data = await res.json();
+      setDiag(data);
+    } catch {
+      setDiag(null);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    loadDiagnostics();
+  }, []);
+
+  return (
+    <div className="rounded-lg border border-amber-400/20 bg-amber-500/5 p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <AlertTriangle size={14} className="text-amber-300" />
+        <span className="text-sm text-amber-200">Hermes 未连接</span>
+      </div>
+
+      {diag && (
+        <div className="text-xs text-text-secondary space-y-1">
+          <p>状态：{diag.reason ?? "未知"}</p>
+          {diag.hermesBridgeUrl && <p>Bridge URL：<span className="font-mono">{diag.hermesBridgeUrl}</span></p>}
+          <p>Token：{diag.hasToken ? "已配置" : "未配置"}</p>
+        </div>
+      )}
+
+      {diag && diag.recommendations.length > 0 && (
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="flex items-center gap-1 text-xs text-text-tertiary hover:text-text-secondary"
+        >
+          {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+          {expanded ? "收起建议" : "查看修复建议"}
+        </button>
+      )}
+
+      {expanded && diag && (
+        <ul className="text-xs text-text-tertiary space-y-1 pl-4 list-disc">
+          {diag.recommendations.map((r, i) => (
+            <li key={i}>{r}</li>
+          ))}
+        </ul>
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={onRetry}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-text-secondary hover:bg-white/10 transition"
+        >
+          <RefreshCw size={12} />
+          重试连接
+        </button>
+        <button
+          onClick={loadDiagnostics}
+          disabled={loading}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-text-secondary hover:bg-white/10 transition disabled:opacity-50"
+        >
+          {loading ? <Loader2 size={12} className="animate-spin" /> : <AlertTriangle size={12} />}
+          诊断连接
+        </button>
+        <a
+          href="/settings"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-text-secondary hover:bg-white/10 transition"
+        >
+          <Settings size={12} />
+          打开设置
+        </a>
+      </div>
+    </div>
+  );
+}
+
 export function BrainChatPanel({
   source,
   initialMessages = [],
@@ -87,7 +224,7 @@ export function BrainChatPanel({
         setMessages(payload.messages);
       }
     } catch {
-      // Keep the server-rendered messages if history refresh is unavailable.
+      // Keep existing messages
     }
   }
 
@@ -133,6 +270,10 @@ export function BrainChatPanel({
     if (canSubmit) formRef.current?.requestSubmit();
   }
 
+  function handleRetry() {
+    window.location.reload();
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const text = message.trim();
@@ -165,6 +306,7 @@ export function BrainChatPanel({
         error?: string;
         userMessage?: BrainChatMessageView;
         assistantMessage?: BrainChatMessageView;
+        compassActions?: BrainChatCompassAction[];
       };
 
       if (!response.ok || !payload.ok || !payload.assistantMessage) {
@@ -174,7 +316,11 @@ export function BrainChatPanel({
       setMessages((current) => {
         const withoutLocal = current.filter((item) => item.id !== localUser.id);
         const next = payload.userMessage ? [...withoutLocal, payload.userMessage] : withoutLocal;
-        return [...next, payload.assistantMessage as BrainChatMessageView];
+        const assistantMsg = {
+          ...payload.assistantMessage,
+          compassActions: payload.compassActions ?? payload.assistantMessage?.compassActions ?? [],
+        };
+        return [...next, assistantMsg];
       });
       void loadMessages();
     } catch (err) {
@@ -187,6 +333,7 @@ export function BrainChatPanel({
           role: "assistant",
           content: `发送失败：${textError}`,
           createdAt: nowLabel(),
+          bridgeOk: false,
         },
       ]);
     } finally {
@@ -194,6 +341,13 @@ export function BrainChatPanel({
       textareaRef.current?.focus();
     }
   }
+
+  const hasMessages = messages.length > 0;
+  const offlineStatusText = !isLive && hasMessages
+    ? "当前离线，下面是历史记录"
+    : !isLive && !hasMessages
+      ? "当前离线，暂无对话"
+      : null;
 
   return (
     <article
@@ -225,45 +379,58 @@ export function BrainChatPanel({
           <p className="mt-1 text-sm text-text-secondary">安排日程、记录想法、分析附件</p>
         </div>
         <div className="inline-flex items-center rounded-md border border-border bg-bg-elevated px-3 py-1.5 text-xs text-text-secondary">
-          <span className={`status-dot ${isLive ? "status-dot-ok" : "status-dot-off"}`} />
-          {statusLabel}
+          <span className={`status-dot ${isLive ? "status-dot-ok" : "status-dot-err"}`} />
+          {isLive ? statusLabel : offlineStatusText ?? statusLabel}
         </div>
       </div>
+
+      {/* Offline diagnostics */}
+      {disabled && !isLive && (
+        <div className="mt-4">
+          <OfflineDiagnostics onRetry={handleRetry} />
+        </div>
+      )}
 
       <div ref={scrollRef} className="chat-scroll mt-5 max-h-96 space-y-3 overflow-y-auto pr-1">
         {messages.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border bg-bg-elevated/60 p-4 text-sm text-text-secondary">
-            直接开始，Hermes 会把该记录的写入 Compass。
+            {disabled ? "Hermes 未连接，无法发送消息。请先修复连接。" : "直接开始，Hermes 会把该记录的写入 Compass。"}
           </div>
         ) : (
           messages.map((item) => (
-            <div
-              key={item.id}
-              className={`max-w-[min(46rem,100%)] rounded-lg border p-3 transition ${
-                item.role === "user"
-                  ? "ml-auto border-accent/40 bg-accent-muted"
-                  : "border-border bg-bg-elevated/70"
-              }`}
-            >
-              <div className="flex items-center justify-between gap-3 text-xs text-text-secondary">
-                <span>{item.role === "user" ? "我" : "Hermes"}</span>
-                <span>{item.createdAt}</span>
-              </div>
-              <p className="mt-2 whitespace-pre-wrap text-sm leading-6">{item.content}</p>
-              {item.attachments && item.attachments.length > 0 ? (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {item.attachments.map((attachment) => (
-                    <span
-                      key={`${item.id}-${attachment.name}-${attachment.size}`}
-                      className="inline-flex max-w-full items-center gap-1 rounded-md border border-border bg-bg-surface px-2 py-1 text-xs text-text-secondary"
-                    >
-                      {attachment.kind === "image" ? <ImagePlus className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
-                      <span className="truncate">{attachment.name}</span>
-                      <span>{formatBytes(attachment.size)}</span>
-                    </span>
-                  ))}
+            <div key={item.id}>
+              <div
+                className={`max-w-[min(46rem,100%)] rounded-lg border p-3 transition ${
+                  item.role === "user"
+                    ? "ml-auto border-accent/40 bg-accent-muted"
+                    : item.bridgeOk === false
+                      ? "border-red-400/20 bg-red-500/5"
+                      : "border-border bg-bg-elevated/70"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-3 text-xs text-text-secondary">
+                  <span>{item.role === "user" ? "我" : "Hermes"}</span>
+                  <span>{item.createdAt}</span>
                 </div>
-              ) : null}
+                <p className="mt-2 whitespace-pre-wrap text-sm leading-6">{item.content}</p>
+                {item.attachments && item.attachments.length > 0 ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {item.attachments.map((attachment) => (
+                      <span
+                        key={`${item.id}-${attachment.name}-${attachment.size}`}
+                        className="inline-flex max-w-full items-center gap-1 rounded-md border border-border bg-bg-surface px-2 py-1 text-xs text-text-secondary"
+                      >
+                        {attachment.kind === "image" ? <ImagePlus className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
+                        <span className="truncate">{attachment.name}</span>
+                        <span>{formatBytes(attachment.size)}</span>
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+              {item.compassActions && item.compassActions.length > 0 && (
+                <CompassActionsSummary actions={item.compassActions} />
+              )}
             </div>
           ))
         )}
@@ -295,8 +462,8 @@ export function BrainChatPanel({
             onKeyDown={handleKeyDown}
             disabled={disabled || isSending}
             rows={2}
-            placeholder={disabled ? "Hermes 未连接" : "说说要安排、记录或分析的事..."}
-            className="min-h-16 max-h-44 w-full resize-none bg-transparent text-sm outline-none placeholder:text-text-tertiary disabled:cursor-not-allowed"
+            placeholder={disabled ? "Hermes 未连接，请先修复连接" : "说说要安排、记录或分析的事..."}
+            className="min-h-16 max-h-44 w-full resize-none bg-transparent text-sm outline-none placeholder:text-text-tertiary disabled:cursor-not-allowed disabled:opacity-60"
           />
           {files.length > 0 ? (
             <div className="mt-3 flex flex-wrap gap-2">
