@@ -142,13 +142,14 @@ export async function fetchFromSource(source: FetchableSource): Promise<FetchedI
 
     // Try RSS first
     const rssItems = parseRssItems(html);
-    const rawCandidates = rssItems.length > 0
-      ? rssItems.slice(0, 20)
-      : extractLinks(html, source.url).slice(0, 20);
+    const rawCandidates: { title: string; url: string; publishedAt?: Date | null }[] =
+      rssItems.length > 0
+        ? rssItems.slice(0, 20)
+        : extractLinks(html, source.url).slice(0, 20);
     const candidates = rawCandidates.map((c) => ({
       title: c.title,
       url: c.url,
-      publishedAt: "publishedAt" in c ? c.publishedAt ?? null : null,
+      publishedAt: (c.publishedAt as Date | null) ?? null,
     }));
 
     for (const candidate of candidates) {
