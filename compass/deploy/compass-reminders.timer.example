@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Compass schedule email reminder sweep every minute
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=1min
+AccuracySec=10s
+Unit=compass-reminders.service
+
+[Install]
+WantedBy=timers.target

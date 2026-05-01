@@ -7,9 +7,8 @@ import { LiveClock } from "@/components/dashboard/live-clock";
 import { getBrainStatus, probeBridgeHealth } from "@/lib/brain/client";
 import { loadBrainConfigFromStore } from "@/lib/brain/settings-store";
 import { db } from "@/lib/db/client";
-import { captures, goals, hermesMessages, journalEntries, reviews, scheduleItems } from "@/lib/db/schema";
+import { captures, goals, hermesMessages, journalEntries, scheduleItems } from "@/lib/db/schema";
 import { formatDateTime } from "@/lib/datetime";
-import { formatReviewTitle } from "@/lib/reviews/format";
 
 export const dynamic = "force-dynamic";
 
@@ -62,8 +61,6 @@ export default async function DashboardPage() {
       db.select({ value: count() }).from(journalEntries).where(gte(journalEntries.date, weekStart)),
     ]);
 
-  const [latestReview] = await db.select().from(reviews).orderBy(desc(reviews.createdAt)).limit(1);
-
   const recentMessages = await db.select().from(hermesMessages).orderBy(desc(hermesMessages.createdAt)).limit(8);
   const config = await loadBrainConfigFromStore();
   const status = getBrainStatus(config);
@@ -81,7 +78,6 @@ export default async function DashboardPage() {
   const inboxCount = inboxResult[0]?.value ?? 0;
   const weekJournal = weeklyJournalResult[0]?.value ?? 0;
   const scheduleProgress = scheduleTotal > 0 ? Math.round((scheduleDone / scheduleTotal) * 100) : 0;
-  const latestReviewTitle = latestReview ? formatReviewTitle(latestReview.title, latestReview.source) : "暂无复盘";
 
   const cards: DashboardCard[] = [
     {
@@ -119,9 +115,9 @@ export default async function DashboardPage() {
     },
     {
       href: "/reviews",
-      label: "最新复盘",
-      value: latestReviewTitle,
-      hint: latestReview ? `更新于 ${formatDateTime(latestReview.createdAt)}` : "还没有复盘记录",
+      label: "执行质量",
+      value: scheduleTotal === 0 ? "暂无数据" : `${scheduleProgress}%`,
+      hint: "查看周/月量化",
       icon: RotateCcw,
       delay: "animate-fade-rise-delay",
       isText: true,

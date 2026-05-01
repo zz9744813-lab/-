@@ -18,6 +18,12 @@ export type ScheduleRow = {
   priority: string;
   status: string;
   source: string;
+  reminderEmail: string | null;
+  reminderMinutes: number;
+  reminderSentAt: string | null;
+  completedAt: string | null;
+  completionNote: string | null;
+  reviewScore: number | null;
 };
 
 const PRIORITY_OPTIONS = [
@@ -37,6 +43,11 @@ function timeRange(start: string | null, end: string | null) {
   if (start && !end) return start;
   if (!start && end) return end;
   return `${start} – ${end}`;
+}
+
+function reminderLabel(row: ScheduleRow) {
+  if (!row.reminderEmail) return "未开启";
+  return `${row.reminderMinutes} 分钟前`;
 }
 
 export function ScheduleTable({ rows }: { rows: ScheduleRow[] }) {
@@ -64,13 +75,15 @@ export function ScheduleTable({ rows }: { rows: ScheduleRow[] }) {
             <span className="text-xs text-text-tertiary">{grouped[date].length} 条</span>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[860px] border-collapse text-sm">
+            <table className="w-full min-w-[1120px] border-collapse text-sm">
               <thead>
                 <tr className="border-b border-white/5 text-left text-xs uppercase tracking-wider text-text-tertiary">
                   <th className="px-4 py-2 font-medium w-[140px]">时间</th>
                   <th className="px-4 py-2 font-medium">标题</th>
                   <th className="px-4 py-2 font-medium">优先级</th>
                   <th className="px-4 py-2 font-medium">状态</th>
+                  <th className="px-4 py-2 font-medium">邮件提醒</th>
+                  <th className="px-4 py-2 font-medium">完成反馈</th>
                   <th className="px-4 py-2 font-medium">日期</th>
                   <th className="px-4 py-2 font-medium">来源</th>
                   <th className="px-4 py-2 font-medium text-right">操作</th>
@@ -138,6 +151,47 @@ export function ScheduleTable({ rows }: { rows: ScheduleRow[] }) {
                         options={STATUS_OPTIONS}
                         save={(id, value) => updateScheduleField(id, "status", value)}
                       />
+                      {row.completedAt ? <p className="mt-1 text-[11px] text-text-tertiary">已记录完成时间</p> : null}
+                    </td>
+                    <td className="px-4 py-2 align-top min-w-[220px]">
+                      <InlineText
+                        id={row.id}
+                        value={row.reminderEmail}
+                        placeholder="填写邮箱开启"
+                        save={(id, value) => updateScheduleField(id, "reminderEmail", value)}
+                        className="!text-xs"
+                      />
+                      <div className="mt-1 flex items-center gap-2 text-[11px] text-text-tertiary">
+                        <span>{reminderLabel(row)}</span>
+                        <InlineText
+                          id={row.id}
+                          value={String(row.reminderMinutes ?? 15)}
+                          placeholder="15"
+                          save={(id, value) => updateScheduleField(id, "reminderMinutes", value)}
+                          className="!w-14 !py-0.5 !text-xs"
+                        />
+                      </div>
+                      {row.reminderSentAt ? <p className="mt-1 text-[11px] text-emerald-300">已发送提醒</p> : null}
+                    </td>
+                    <td className="px-4 py-2 align-top min-w-[220px]">
+                      <InlineText
+                        id={row.id}
+                        value={row.completionNote}
+                        placeholder="完成后写一句反馈"
+                        multiline
+                        save={(id, value) => updateScheduleField(id, "completionNote", value)}
+                        className="!text-xs"
+                      />
+                      <div className="mt-1 flex items-center gap-2 text-[11px] text-text-tertiary">
+                        <span>评分</span>
+                        <InlineText
+                          id={row.id}
+                          value={row.reviewScore === null ? "" : String(row.reviewScore)}
+                          placeholder="0-100"
+                          save={(id, value) => updateScheduleField(id, "reviewScore", value)}
+                          className="!w-16 !py-0.5 !text-xs"
+                        />
+                      </div>
                     </td>
                     <td className="px-4 py-2 align-top">
                       <InlineDate

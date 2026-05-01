@@ -1,0 +1,9 @@
+[Unit]
+Description=Compass schedule email reminder sweep
+Wants=network-online.target
+After=network-online.target compass.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/compass/reminders.env
+ExecStart=/usr/bin/curl -fsS -H "Authorization: Bearer ${REMINDER_CRON_TOKEN}" http://127.0.0.1:3001/api/reminders/schedule

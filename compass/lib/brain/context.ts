@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gte } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import {
   captures,
@@ -8,6 +8,8 @@ import {
   habits,
   insights,
   journalEntries,
+  reviewMemories,
+  scheduleItems,
 } from "@/lib/db/schema";
 
 function todayDateString() {
@@ -194,8 +196,56 @@ async function getInsightsContext() {
   }
 }
 
+async function getScheduleContext() {
+  try {
+    const today = todayDateString();
+    const rows = await db
+      .select()
+      .from(scheduleItems)
+      .where(gte(scheduleItems.date, today))
+      .orderBy(asc(scheduleItems.date), asc(scheduleItems.startTime))
+      .limit(60);
+
+    return rows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      description: row.description,
+      date: row.date,
+      startTime: row.startTime,
+      endTime: row.endTime,
+      priority: row.priority,
+      status: row.status,
+      completionNote: row.completionNote,
+      reviewScore: row.reviewScore,
+      reminderEnabled: Boolean(row.reminderEmail),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+async function getReviewMemoryContext() {
+  try {
+    const rows = await db.select().from(reviewMemories).orderBy(desc(reviewMemories.createdAt)).limit(30);
+    return rows.map((row) => ({
+      id: row.id,
+      period: row.period,
+      startDate: row.startDate,
+      endDate: row.endDate,
+      title: row.title,
+      summary: truncateText(row.summary, 400),
+      metrics: row.metricsJson,
+      dimensions: row.dimensionsJson,
+      sourceId: row.sourceId,
+      createdAt: row.createdAt,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 export async function getCompassBrainContext() {
-  const [dashboard, goalsData, habitsData, journals, inbox, duolingo, insightsData] = await Promise.all([
+  const [dashboard, goalsData, habitsData, journals, inbox, duolingo, insightsData, schedule, reviewMemory] = await Promise.all([
     getDashboardContext(),
     getGoalsContext(),
     getHabitsContext(),
@@ -203,6 +253,8 @@ export async function getCompassBrainContext() {
     getInboxContext(),
     getDuolingoContext(),
     getInsightsContext(),
+    getScheduleContext(),
+    getReviewMemoryContext(),
   ]);
 
   return {
@@ -213,5 +265,7 @@ export async function getCompassBrainContext() {
     inbox,
     duolingo,
     insights: insightsData,
+    schedule,
+    reviewMemory,
   };
 }

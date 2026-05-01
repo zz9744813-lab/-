@@ -100,6 +100,19 @@ CREATE TABLE IF NOT EXISTS reviews (
   source TEXT NOT NULL DEFAULT 'hermes',
   created_at INTEGER NOT NULL DEFAULT (unixepoch())
 );
+CREATE TABLE IF NOT EXISTS review_memories (
+  id TEXT PRIMARY KEY NOT NULL,
+  period TEXT NOT NULL,
+  start_date TEXT,
+  end_date TEXT,
+  title TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  metrics_json TEXT,
+  dimensions_json TEXT,
+  source TEXT NOT NULL DEFAULT 'hermes',
+  source_id TEXT,
+  created_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
 CREATE TABLE IF NOT EXISTS hermes_messages (
   id TEXT PRIMARY KEY NOT NULL,
   thread_id TEXT,
@@ -131,6 +144,13 @@ CREATE TABLE IF NOT EXISTS schedule_items (
   source TEXT NOT NULL DEFAULT 'hermes',
   source_message_id TEXT,
   evidence TEXT,
+  reminder_email TEXT,
+  reminder_minutes INTEGER NOT NULL DEFAULT 15,
+  reminder_sent_at INTEGER,
+  completed_at INTEGER,
+  completion_note TEXT,
+  review_score REAL,
+  review_json TEXT,
   created_at INTEGER NOT NULL DEFAULT (unixepoch()),
   updated_at INTEGER NOT NULL DEFAULT (unixepoch())
 );
@@ -187,6 +207,13 @@ function ensureColumn(table: string, column: string, definition: string) {
 }
 
 ensureColumn("journal_entries", "title", "TEXT");
+ensureColumn("schedule_items", "reminder_email", "TEXT");
+ensureColumn("schedule_items", "reminder_minutes", "INTEGER NOT NULL DEFAULT 15");
+ensureColumn("schedule_items", "reminder_sent_at", "INTEGER");
+ensureColumn("schedule_items", "completed_at", "INTEGER");
+ensureColumn("schedule_items", "completion_note", "TEXT");
+ensureColumn("schedule_items", "review_score", "REAL");
+ensureColumn("schedule_items", "review_json", "TEXT");
 
 const timestampColumns: Record<string, string[]> = {
   captures: ["created_at"],
@@ -198,9 +225,10 @@ const timestampColumns: Record<string, string[]> = {
   finance_snapshots: ["created_at"],
   finance_transactions: ["created_at"],
   reviews: ["created_at"],
+  review_memories: ["created_at"],
   hermes_messages: ["created_at"],
   insights: ["created_at"],
-  schedule_items: ["created_at", "updated_at"],
+  schedule_items: ["reminder_sent_at", "completed_at", "created_at", "updated_at"],
   skills_cache: ["created_at", "synced_at"],
   app_settings: ["updated_at"],
   duolingo_snapshots: ["synced_at"],

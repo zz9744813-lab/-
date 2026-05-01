@@ -1,137 +1,189 @@
 import { desc } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
-import { getCompassBrainContext } from "@/lib/brain/context";
-import { sendBrainMessage } from "@/lib/brain/client";
-import { loadBrainConfigFromStore } from "@/lib/brain/settings-store";
 import { db } from "@/lib/db/client";
-import { reviews } from "@/lib/db/schema";
-import { formatDateTime, todayDateInputValue } from "@/lib/datetime";
+import { reviewMemories, scheduleItems } from "@/lib/db/schema";
+import { formatDateTime } from "@/lib/datetime";
 import { formatReviewBody, formatReviewTitle } from "@/lib/reviews/format";
 
 export const dynamic = "force-dynamic";
 
-const PERIOD_LABELS: Record<string, string> = { day: "日复盘", week: "周复盘", month: "月复盘" };
-const SOURCE_LABELS: Record<string, string> = { hermes: "Hermes", web: "手动" };
+type ScheduleRow = typeof scheduleItems.$inferSelect;
+type MemoryRow = typeof reviewMemories.$inferSelect;
 
-function periodLabel(value: string) {
-  return PERIOD_LABELS[value] ?? value;
+type PeriodSummary = {
+  key: string;
+  label: string;
+  planned: number;
+  done: number;
+  cancelled: number;
+  completionRate: number;
+  reminderCount: number;
+  memoryCount: number;
+  averageScore: number | null;
+};
+
+function mondayKey(dateString: string) {
+  const date = new Date(`${dateString}T00:00:00+08:00`);
+  const day = date.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  date.setDate(date.getDate() + diff);
+  return date.toISOString().slice(0, 10);
 }
 
-function sourceLabel(value: string) {
-  return SOURCE_LABELS[value] ?? value;
+function monthKey(dateString: string) {
+  return dateString.slice(0, 7);
 }
 
-async function createReview(formData: FormData) {
-  "use server";
-
-  const period = String(formData.get("period") ?? "week").trim() || "week";
-  const title = String(formData.get("title") ?? "").trim();
-  const body = String(formData.get("body") ?? "").trim();
-  const startDate = String(formData.get("startDate") ?? "").trim();
-  const endDate = String(formData.get("endDate") ?? "").trim();
-  if (!title || !body) return;
-
-  await db.insert(reviews).values({
-    period,
-    title,
-    body,
-    source: "web",
-    startDate: startDate || null,
-    endDate: endDate || null,
-    createdAt: new Date(),
-  });
-  revalidatePath("/reviews");
-  revalidatePath("/dashboard");
+function memoryDate(row: MemoryRow) {
+  return row.startDate ?? row.endDate ?? row.createdAt.toISOString().slice(0, 10);
 }
 
-async function generateReview() {
-  "use server";
+function average(values: number[]) {
+  if (values.length === 0) return null;
+  return Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 10) / 10;
+}
 
-  const config = await loadBrainConfigFromStore();
-  const context = await getCompassBrainContext();
-  const prompt = [
-    "你是 Compass 的个人成长大脑。请基于真实上下文生成一份可以保存的中文复盘。",
-    "要求：",
-    "- 只基于 Compass 上下文，不要编造事实",
-    "- 先给一句总评",
-    "- 列出 2 个做得好的地方和 2 个需要调整的地方",
-    "- 给出 3 个下一步行动",
-    "- 输出清晰的 Markdown，语气直接、具体、可执行",
-  ].join("\n");
+function buildSummaries(mode: "week" | "month", schedules: ScheduleRow[], memories: MemoryRow[]): PeriodSummary[] {
+  const keyFor = mode === "week" ? mondayKey : monthKey;
+  const map = new Map<string, PeriodSummary & { scores: number[] }>();
 
-  const result = await sendBrainMessage(prompt, { page: "reviews", compass: context }, config);
-  await db.insert(reviews).values({
-    period: "week",
-    title: result.ok ? "Hermes 自动复盘" : "复盘生成失败",
-    body: result.ok ? result.response : `生成失败：${result.error ?? "未知错误"}`,
-    source: "hermes",
-    createdAt: new Date(),
-  });
-  revalidatePath("/reviews");
-  revalidatePath("/dashboard");
+  function get(key: string) {
+    const existing = map.get(key);
+    if (existing) return existing;
+    const label = mode === "week" ? `${key} 起` : key;
+    const item = {
+      key,
+      label,
+      planned: 0,
+      done: 0,
+      cancelled: 0,
+      completionRate: 0,
+      reminderCount: 0,
+      memoryCount: 0,
+      averageScore: null,
+      scores: [] as number[],
+    };
+    map.set(key, item);
+    return item;
+  }
+
+  for (const row of schedules) {
+    const item = get(keyFor(row.date));
+    if (row.status === "cancelled") item.cancelled += 1;
+    else item.planned += 1;
+    if (row.status === "done") item.done += 1;
+    if (row.reminderEmail) item.reminderCount += 1;
+    if (typeof row.reviewScore === "number") item.scores.push(row.reviewScore);
+  }
+
+  for (const row of memories) {
+    const item = get(keyFor(memoryDate(row)));
+    item.memoryCount += 1;
+  }
+
+  return Array.from(map.values())
+    .map((item) => ({
+      ...item,
+      completionRate: item.planned > 0 ? Math.round((item.done / item.planned) * 100) : 0,
+      averageScore: average(item.scores),
+    }))
+    .sort((a, b) => b.key.localeCompare(a.key))
+    .slice(0, mode === "week" ? 8 : 6);
+}
+
+function MetricTable({ title, rows }: { title: string; rows: PeriodSummary[] }) {
+  return (
+    <article className="glass overflow-hidden">
+      <div className="border-b border-white/5 px-5 py-4">
+        <h2 className="font-semibold">{title}</h2>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[760px] border-collapse text-sm">
+          <thead>
+            <tr className="border-b border-white/5 text-left text-xs text-text-tertiary">
+              <th className="px-4 py-3 font-medium">周期</th>
+              <th className="px-4 py-3 font-medium">计划</th>
+              <th className="px-4 py-3 font-medium">完成</th>
+              <th className="px-4 py-3 font-medium">取消</th>
+              <th className="px-4 py-3 font-medium">完成率</th>
+              <th className="px-4 py-3 font-medium">平均评分</th>
+              <th className="px-4 py-3 font-medium">提醒</th>
+              <th className="px-4 py-3 font-medium">记忆</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.key} className="border-b border-white/5">
+                <td className="px-4 py-3 font-mono text-xs text-text-secondary">{row.label}</td>
+                <td className="px-4 py-3">{row.planned}</td>
+                <td className="px-4 py-3 text-emerald-300">{row.done}</td>
+                <td className="px-4 py-3 text-text-tertiary">{row.cancelled}</td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <div className="h-1.5 w-24 overflow-hidden rounded-full bg-white/10">
+                      <div className="h-full rounded-full bg-accent" style={{ width: `${row.completionRate}%` }} />
+                    </div>
+                    <span className="font-mono text-xs">{row.completionRate}%</span>
+                  </div>
+                </td>
+                <td className="px-4 py-3">{row.averageScore === null ? "—" : row.averageScore}</td>
+                <td className="px-4 py-3">{row.reminderCount}</td>
+                <td className="px-4 py-3">{row.memoryCount}</td>
+              </tr>
+            ))}
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={8} className="px-4 py-8 text-center text-text-secondary">
+                  还没有足够的执行数据。
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+    </article>
+  );
 }
 
 export default async function ReviewsPage() {
-  const items = await db.select().from(reviews).orderBy(desc(reviews.createdAt)).limit(50);
-  const today = todayDateInputValue();
+  const [schedules, memories] = await Promise.all([
+    db.select().from(scheduleItems).orderBy(desc(scheduleItems.date), desc(scheduleItems.startTime)).limit(500),
+    db.select().from(reviewMemories).orderBy(desc(reviewMemories.createdAt)).limit(200),
+  ]);
+  const weekRows = buildSummaries("week", schedules, memories);
+  const monthRows = buildSummaries("month", schedules, memories);
+  const latest = memories.slice(0, 12);
 
   return (
     <section className="space-y-6">
       <div>
-        <p className="text-sm text-text-secondary">持续复盘，让系统越用越懂你</p>
-        <h1 className="text-3xl font-semibold">复盘</h1>
+        <p className="text-sm text-text-secondary">由完成反馈、Hermes 对话和日程执行自动沉淀</p>
+        <h1 className="mt-1 text-4xl" style={{ fontFamily: "var(--font-fraunces)" }}>
+          复盘记忆
+        </h1>
       </div>
 
-      <article className="rounded-lg border border-border bg-bg-surface p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold">Hermes 自动复盘</h2>
-            <p className="mt-1 text-sm text-text-secondary">读取 Compass 里的目标、日程、日记、收件箱和洞察，生成一份可执行复盘。</p>
-          </div>
-          <form action={generateReview}>
-            <button className="rounded-md border border-accent bg-accent-muted px-4 py-2 text-sm">生成复盘</button>
-          </form>
-        </div>
-      </article>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <MetricTable title="周执行量化" rows={weekRows} />
+        <MetricTable title="月执行量化" rows={monthRows} />
+      </div>
 
-      <article className="rounded-lg border border-border bg-bg-surface p-6">
-        <h2 className="text-lg font-semibold">手动记录复盘</h2>
-        <form action={createReview} className="mt-4 space-y-3">
-          <div className="grid gap-3 md:grid-cols-4">
-            <select name="period" defaultValue="week" className="rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm">
-              <option value="day">日复盘</option>
-              <option value="week">周复盘</option>
-              <option value="month">月复盘</option>
-            </select>
-            <input type="date" name="startDate" className="rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm" />
-            <input type="date" name="endDate" defaultValue={today} className="rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm" />
-            <button type="submit" className="rounded-md border border-accent bg-accent-muted px-4 py-2 text-sm">保存复盘</button>
-          </div>
-          <input name="title" required placeholder="标题" className="w-full rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm" />
-          <textarea name="body" required rows={6} placeholder="写下复盘内容" className="w-full rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm" />
-        </form>
-      </article>
-
-      {items.length === 0 ? (
-        <article className="rounded-lg border border-border bg-bg-surface p-6 text-text-secondary">还没有复盘记录。可以先让 Hermes 生成一份。</article>
-      ) : (
-        <div className="space-y-3">
-          {items.map((review) => (
-            <article key={review.id} className="rounded-lg border border-border bg-bg-surface p-5">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h3 className="font-semibold">{formatReviewTitle(review.title, review.source)}</h3>
-                  <p className="mt-1 text-xs text-text-secondary">
-                    {periodLabel(review.period)} · {sourceLabel(review.source)} · {formatDateTime(review.createdAt)}
-                    {review.startDate || review.endDate ? ` · ${review.startDate ?? "未设置"} ~ ${review.endDate ?? "未设置"}` : ""}
-                  </p>
-                </div>
+      <article className="glass p-5">
+        <h2 className="font-semibold">最近复盘记忆</h2>
+        <div className="mt-4 space-y-3">
+          {latest.map((memory) => (
+            <div key={memory.id} className="rounded-lg border border-border bg-bg-elevated/60 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h3 className="font-semibold">{formatReviewTitle(memory.title, memory.source)}</h3>
+                <span className="text-xs text-text-tertiary">
+                  {memory.period} · {formatDateTime(memory.createdAt)}
+                </span>
               </div>
-              <p className="mt-3 whitespace-pre-wrap text-sm text-text-secondary">{formatReviewBody(review.body)}</p>
-            </article>
+              <p className="mt-2 whitespace-pre-wrap text-sm text-text-secondary">{formatReviewBody(memory.summary)}</p>
+            </div>
           ))}
+          {latest.length === 0 ? <p className="text-sm text-text-secondary">完成任务并向 Hermes 反馈后，这里会自动出现记忆。</p> : null}
         </div>
-      )}
+      </article>
     </section>
   );
 }
