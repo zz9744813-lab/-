@@ -1,6 +1,4 @@
-import { eq } from "drizzle-orm";
-import { db } from "@/lib/db/client";
-import { scheduleItems } from "@/lib/db/schema";
+import { cancelScheduleItem } from "@/lib/actions/schedule";
 import type { McpTool } from "@/lib/mcp/tools/types";
 
 export const cancelScheduleItemTool: McpTool = {
@@ -11,11 +9,9 @@ export const cancelScheduleItemTool: McpTool = {
     const id = String(params.id ?? "").trim();
     if (!id) throw new Error("id is required");
 
-    const result = await db
-      .update(scheduleItems)
-      .set({ status: "cancelled", updatedAt: new Date() })
-      .where(eq(scheduleItems.id, id));
+    const reason = String(params.reason ?? "Hermes cancelled");
+    await cancelScheduleItem(id, { reason });
 
-    return { ok: true, cancelled: result.changes ?? 0 };
+    return { ok: true, cancelled: 1 };
   },
 };

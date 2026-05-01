@@ -146,8 +146,24 @@ export const scheduleItems = sqliteTable("schedule_items", {
   completionNote: text("completion_note"),
   reviewScore: real("review_score"),
   reviewJson: text("review_json"),
+  quickComplete: integer("quick_complete", { mode: "boolean" }).notNull().default(false),
+  delayReason: text("delay_reason"),
+  skipReason: text("skip_reason"),
+  cancelReason: text("cancel_reason"),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+});
+
+export const scheduleEvents = sqliteTable("schedule_events", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  scheduleItemId: text("schedule_item_id").notNull().references(() => scheduleItems.id, { onDelete: "cascade" }),
+  type: text("type").notNull(),
+  note: text("note"),
+  reason: text("reason"),
+  fromStatus: text("from_status"),
+  toStatus: text("to_status"),
+  payloadJson: text("payload_json"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
 });
 
 export const skillsCache = sqliteTable("skills_cache", {
@@ -194,4 +210,73 @@ export const duolingoSyncLog = sqliteTable("duolingo_sync_log", {
   status: text("status").notNull(),
   eventsAdded: integer("events_added").notNull().default(0),
   errorMsg: text("error_msg"),
+});
+
+// ── Japan Intel ──────────────────────────────────────────────
+
+export const japanSources = sqliteTable("japan_sources", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  url: text("url").notNull(),
+  category: text("category").notNull(),
+  authorityLevel: text("authority_level").notNull(),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  checkFrequency: text("check_frequency").notNull().default("daily"),
+  lastCheckedAt: integer("last_checked_at", { mode: "timestamp" }),
+  lastSuccessAt: integer("last_success_at", { mode: "timestamp" }),
+  lastError: text("last_error"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+});
+
+export const japanIntelItems = sqliteTable("japan_intel_items", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  sourceId: text("source_id").notNull().references(() => japanSources.id),
+  title: text("title").notNull(),
+  url: text("url").notNull(),
+  publishedAt: integer("published_at", { mode: "timestamp" }),
+  fetchedAt: integer("fetched_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  category: text("category").notNull(),
+  language: text("language"),
+  rawText: text("raw_text"),
+  summaryZh: text("summary_zh"),
+  impactLevel: text("impact_level").notNull().default("low"),
+  relevanceScore: integer("relevance_score").notNull().default(0),
+  tagsJson: text("tags_json"),
+  contentHash: text("content_hash").notNull(),
+  isMajorUpdate: integer("is_major_update", { mode: "boolean" }).notNull().default(false),
+  isArchived: integer("is_archived", { mode: "boolean" }).notNull().default(false),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+});
+
+export const japanIntelDigests = sqliteTable("japan_intel_digests", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  periodStart: text("period_start").notNull(),
+  periodEnd: text("period_end").notNull(),
+  title: text("title").notNull(),
+  bodyMarkdown: text("body_markdown").notNull(),
+  itemIdsJson: text("item_ids_json").notNull(),
+  sentAt: integer("sent_at", { mode: "timestamp" }),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+});
+
+export const japanIntelAlerts = sqliteTable("japan_intel_alerts", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  itemId: text("item_id").notNull().references(() => japanIntelItems.id),
+  reason: text("reason").notNull(),
+  severity: text("severity").notNull(),
+  sentAt: integer("sent_at", { mode: "timestamp" }),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+});
+
+export const japanIntelEmailLogs = sqliteTable("japan_intel_email_logs", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  kind: text("kind").notNull(),
+  toEmail: text("to_email").notNull(),
+  subject: text("subject").notNull(),
+  bodyMarkdown: text("body_markdown").notNull(),
+  status: text("status").notNull(),
+  error: text("error"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  sentAt: integer("sent_at", { mode: "timestamp" }),
 });

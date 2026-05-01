@@ -5,6 +5,7 @@ import { loadBrainConfigFromStore } from "@/lib/brain/settings-store";
 import { db } from "@/lib/db/client";
 import { hermesMessages } from "@/lib/db/schema";
 import { formatDateTime } from "@/lib/datetime";
+import { BrainChatPanel, type BrainChatMessageView } from "@/components/brain/brain-chat-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +35,24 @@ export default async function BrainPage() {
     .select()
     .from(hermesMessages)
     .orderBy(desc(hermesMessages.createdAt))
-    .limit(20);
+    .limit(100);
+
+  const chatMessages: BrainChatMessageView[] = recentMessages.reverse().map((msg) => ({
+    id: msg.id,
+    role: msg.role as "user" | "assistant",
+    content: msg.content,
+    createdAt: formatDateTime(msg.createdAt),
+    attachments: msg.toolCall ? (() => {
+      try {
+        const tc = JSON.parse(msg.toolCall);
+        return tc.attachments?.map((a: { name: string; size: number; kind: string }) => ({
+          name: a.name,
+          size: a.size,
+          kind: a.kind,
+        }));
+      } catch { return undefined; }
+    })() : undefined,
+  }));
 
   const stats = [
     { label: "目标", value: context.goals.length },
@@ -47,13 +65,13 @@ export default async function BrainPage() {
   return (
     <section className="space-y-6">
       <div className="animate-fade-rise">
-        <p className="text-sm text-text-secondary">Hermes 大脑只读视图</p>
+        <p className="text-sm text-text-secondary">Hermes 大脑 · 完整聊天</p>
         <h1 className="mt-1 text-4xl tracking-tight" style={{ fontFamily: "var(--font-fraunces)" }}>
           大脑
         </h1>
       </div>
 
-      {/* 状态条 */}
+      {/* Status bar */}
       <article className="glass animate-fade-rise-delay flex flex-wrap items-center gap-3 p-5">
         <StatusPill ok={brainReady} label={brainReady ? `已连接 · ${health.latencyMs}ms` : "未连接"} />
         <span className="text-sm text-text-secondary">{status.statusText}</span>
@@ -62,7 +80,7 @@ export default async function BrainPage() {
         )}
       </article>
 
-      {/* Compass 上下文摘要 */}
+      {/* Context stats */}
       <article className="glass animate-fade-rise-delay-2 p-5">
         <p className="mb-3 text-xs uppercase tracking-wider text-text-tertiary">Compass 上下文(Hermes 实时可读)</p>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
@@ -73,38 +91,18 @@ export default async function BrainPage() {
             </div>
           ))}
         </div>
-        <p className="mt-4 text-xs text-text-tertiary">
-          想触发对话或安排日程,去 <span className="text-text-secondary">总览</span> 页底部的 Hermes 对话区。
-        </p>
       </article>
 
-      {/* 最近消息 */}
-      <article className="glass animate-fade-rise-delay-2 p-5">
-        <p className="mb-3 text-xs uppercase tracking-wider text-text-tertiary">最近对话</p>
-        {recentMessages.length === 0 ? (
-          <p className="text-sm text-text-secondary">暂无对话记录。</p>
-        ) : (
-          <ul className="space-y-2">
-            {recentMessages.map((msg) => (
-              <li
-                key={msg.id}
-                className={`rounded-lg border border-white/5 p-3 text-sm ${
-                  msg.role === "user" ? "bg-white/[0.04]" : "bg-orange-500/[0.06]"
-                }`}
-              >
-                <div className="mb-1 flex items-center gap-2 text-xs text-text-tertiary">
-                  <span className="font-medium text-text-secondary">
-                    {msg.role === "user" ? "我" : "Hermes"}
-                  </span>
-                  <span>·</span>
-                  <span className="font-mono">{formatDateTime(msg.createdAt)}</span>
-                </div>
-                <p className="line-clamp-3 whitespace-pre-wrap text-text-primary">{msg.content}</p>
-              </li>
-            ))}
-          </ul>
-        )}
-      </article>
+      {/* Chat panel */}
+      <div className="animate-fade-rise-delay-2">
+        <BrainChatPanel
+          source="brain"
+          initialMessages={chatMessages}
+          statusLabel={brainReady ? `已连接 · ${health.latencyMs}ms` : "未连接"}
+          isLive={brainReady}
+          disabled={!brainReady}
+        />
+      </div>
     </section>
   );
 }

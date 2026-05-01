@@ -1,12 +1,12 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { reviewMemories, scheduleItems } from "@/lib/db/schema";
+import { completeScheduleItem } from "@/lib/actions/schedule";
 import type { McpTool } from "@/lib/mcp/tools/types";
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_PATTERN = /^\d{2}:\d{2}$/;
 const PRIORITIES = new Set(["low", "medium", "high"]);
-const STATUSES = new Set(["planned", "done", "cancelled"]);
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function optionalString(value: unknown): string | null {
@@ -23,7 +23,7 @@ function stringifyOptionalJson(value: unknown) {
 
 export const updateScheduleItemTool: McpTool = {
   name: "compass.update_schedule_item",
-  description: "Update a schedule item's fields. Only provided fields are changed.",
+  description: "Update a schedule item's fields. Only provided fields are changed. Status changes go through proper actions with event logging.",
   async execute(params) {
     const id = String(params.id ?? "").trim();
     if (!id) throw new Error("id is required");
@@ -31,6 +31,43 @@ export const updateScheduleItemTool: McpTool = {
     const [existing] = await db.select().from(scheduleItems).where(eq(scheduleItems.id, id)).limit(1);
     if (!existing) throw new Error("schedule item not found");
 
+    // Handle status transitions through proper actions
+    if (params.status !== undefined) {
+      const newStatus = String(params.status).trim();
+      if (newStatus === "done") {
+        await completeScheduleItem(id, {
+          completionNote: String(params.completionNote ?? `完成了任务：${existing.title}`),
+          reviewScore: Number(params.reviewScore ?? 75),
+          quickComplete: false,
+        });
+
+        // Create review memory
+        const title = existing.title;
+        const summary = String(params.completionNote ?? `完成了任务：${title}`);
+        await db.insert(reviewMemories).values({
+          period: "task",
+          startDate: existing.date,
+          endDate: existing.date,
+          title: `任务完成复盘：${title}`,
+          summary,
+          metricsJson: JSON.stringify({
+            scheduleItemId: id,
+            status: "done",
+            score: params.reviewScore ?? 75,
+            date: existing.date,
+          }),
+          dimensionsJson: stringifyOptionalJson(params.reviewJson),
+          source: "hermes",
+          sourceId: id,
+        });
+
+        return { ok: true, updated: 1, action: "completed" };
+      }
+      // For other status changes, just update fields (not status) via direct DB
+      // Status changes should go through the proper action functions
+    }
+
+    // Non-status field updates
     const patch: Record<string, unknown> = {};
 
     if (params.title !== undefined) {
@@ -60,14 +97,6 @@ export const updateScheduleItemTool: McpTool = {
       const value = String(params.priority).trim();
       if (!PRIORITIES.has(value)) throw new Error("priority must be low/medium/high");
       patch.priority = value;
-    }
-    if (params.status !== undefined) {
-      const value = String(params.status).trim();
-      if (!STATUSES.has(value)) throw new Error("status must be planned/done/cancelled");
-      patch.status = value;
-      if (value === "done" && !existing.completedAt) {
-        patch.completedAt = new Date();
-      }
     }
     if (params.reminderEmail !== undefined) {
       const email = optionalString(params.reminderEmail);
@@ -99,30 +128,6 @@ export const updateScheduleItemTool: McpTool = {
     patch.updatedAt = new Date();
 
     const result = await db.update(scheduleItems).set(patch).where(eq(scheduleItems.id, id));
-    if (
-      (patch.status === "done" || params.completionNote !== undefined || params.reviewScore !== undefined || params.reviewJson !== undefined) &&
-      (patch.completionNote || patch.reviewScore !== undefined || patch.reviewJson)
-    ) {
-      const title = String(patch.title ?? existing.title);
-      const summary = String(patch.completionNote ?? existing.completionNote ?? `完成了任务：${title}`);
-      await db.insert(reviewMemories).values({
-        period: "task",
-        startDate: existing.date,
-        endDate: existing.date,
-        title: `任务完成复盘：${title}`,
-        summary,
-        metricsJson: JSON.stringify({
-          scheduleItemId: id,
-          status: "done",
-          score: patch.reviewScore ?? existing.reviewScore ?? null,
-          date: existing.date,
-        }),
-        dimensionsJson: stringifyOptionalJson(params.reviewJson),
-        source: "hermes",
-        sourceId: id,
-      });
-    }
-
     return { ok: true, updated: result.changes ?? 0 };
   },
 };
