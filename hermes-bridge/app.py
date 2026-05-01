@@ -31,6 +31,14 @@ def parse_bool_env(name: str, default: bool) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def first_env(*names: str) -> str | None:
+    for name in names:
+        value = os.getenv(name)
+        if value is not None and value.strip() != "":
+            return value.strip()
+    return None
+
+
 def require_token(authorization: str | None) -> None:
     expected = os.getenv("HERMES_BRIDGE_TOKEN", "").strip()
     if not expected:
@@ -51,10 +59,17 @@ def build_agent() -> Any:
         "skip_memory": parse_bool_env("HERMES_BRIDGE_SKIP_MEMORY", False),
         "skip_context_files": parse_bool_env("HERMES_BRIDGE_SKIP_CONTEXT_FILES", False),
     }
-    provider = os.getenv("HERMES_AGENT_PROVIDER") or os.getenv("MODEL_PROVIDER") or "deepseek"
-    base_url = os.getenv("HERMES_AGENT_BASE_URL") or os.getenv("DEEPSEEK_BASE_URL") or "https://api.deepseek.com"
-    api_key = os.getenv("HERMES_AGENT_API_KEY") or os.getenv("DEEPSEEK_API_KEY")
-    model = os.getenv("HERMES_AGENT_MODEL") or os.getenv("DEEPSEEK_MODEL") or "deepseek-v4-flash"
+
+    # Keep the bridge aligned with Hermes gateway by default: if no explicit
+    # HERMES_AGENT_* override is configured, AIAgent reads ~/.hermes/config.yaml.
+    # Legacy MODEL_PROVIDER/DEEPSEEK_* variables are still honored when present,
+    # but the bridge no longer injects DeepSeek defaults that can shadow the
+    # user's primary Hermes model.
+    provider = first_env("HERMES_AGENT_PROVIDER", "MODEL_PROVIDER")
+    base_url = first_env("HERMES_AGENT_BASE_URL", "DEEPSEEK_BASE_URL")
+    api_key = first_env("HERMES_AGENT_API_KEY", "DEEPSEEK_API_KEY")
+    model = first_env("HERMES_AGENT_MODEL", "DEEPSEEK_MODEL")
+
     if provider:
         kwargs["provider"] = provider
     if base_url:
@@ -169,7 +184,7 @@ def call_direct_fallback(message: str, context: dict[str, Any]) -> str:
 
 def run_agent_sync(message: str, context: dict[str, Any]) -> tuple[str, str]:
     if parse_bool_env("HERMES_BRIDGE_DIRECT_FOR_ATTACHMENTS", False) and context_has_attachments(context):
-        return call_direct_fallback(message, context), "deepseek-direct-attachments"
+        return call_direct_fallback(message, context), "direct-attachments"
 
     prompt = build_prompt(message, context)
 
@@ -189,7 +204,7 @@ def run_agent_sync(message: str, context: dict[str, Any]) -> tuple[str, str]:
         print(f"Hermes Python 调用失败，使用 fallback: {exc}", flush=True)
 
     if parse_bool_env("HERMES_BRIDGE_ALLOW_DIRECT_FALLBACK", True):
-        return call_direct_fallback(message, context), "deepseek-direct-fallback"
+        return call_direct_fallback(message, context), "direct-fallback"
 
     raise RuntimeError("Hermes 没有返回可用回复")
 

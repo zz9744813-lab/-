@@ -10,11 +10,11 @@ A local-first, design-forward personal growth dashboard whose brain is a self-ho
 
 Compass is a single-user personal growth OS that runs on your own VPS. It tracks six dimensions of your life — goals, habits, mood, knowledge, finance, and time — and surfaces them through a fast, keyboard-first dashboard.
 
-What makes it different from Notion templates: it doesn't have its own AI brain. Instead, it integrates deeply with [Hermes Agent](https://github.com/NousResearch/hermes-agent) via MCP, so the same brain that talks to you on Telegram can read your Compass data, generate weekly reviews, and surface insights it learns over time.
+What makes it different from Notion templates: it doesn't have its own AI brain. Instead, it integrates deeply with Hermes Agent via MCP, so the same brain that talks to you on chat clients can read your Compass data, generate weekly reviews, and surface insights it learns over time.
 
 ## Status
 
-🚧 Active development. See `compass-spec-v2.md` for the full product + technical specification.
+Active development. See `compass-spec-v2.md` for the full product + technical specification.
 
 **Phase 1 shipped** (foundation):
 - Next.js App Router scaffold
@@ -25,7 +25,7 @@ What makes it different from Notion templates: it doesn't have its own AI brain.
 - Inbox page listing captures
 
 **Next up — Phase 2** (Hermes integration):
-- Provider-based brain client (disabled/hermes-bridge/openai-compatible)
+- Provider-based brain client (disabled/hermes-bridge)
 - MCP server exposing Compass data
 - Brain page provider-aware chat MVP
 
@@ -37,7 +37,7 @@ Language:      TypeScript (strict)
 Styling:       Tailwind + CSS variables
 DB:            SQLite via better-sqlite3
 ORM:           Drizzle
-AI:            Provider-based brain config (disabled / hermes-bridge / openai-compatible)
+AI:            Provider-based brain config (disabled / hermes-bridge)
 MCP:           @modelcontextprotocol/sdk
 ```
 
@@ -50,14 +50,14 @@ pnpm db:migrate
 pnpm dev      # opens at http://localhost:3001
 ```
 
-
 ## Brain configuration
 
 Compass 使用 provider-based 大脑配置：
 
 - `BRAIN_PROVIDER=disabled`（默认，可离线独立使用）
 - `BRAIN_PROVIDER=hermes-bridge`（推荐，走本机 Hermes Bridge）
-- `BRAIN_PROVIDER=openai-compatible`（备用直连模式）
+
+Compass 不再直接配置底层 LLM provider/model。DeepSeek / OpenRouter / NVIDIA / SiliconFlow 等模型应统一配置在 Hermes 侧（`~/.hermes/config.yaml`、`~/.hermes/runtime.env`），这样 Web、gateway、定时任务可以共用同一个大脑配置。
 
 对应环境变量见 `compass/.env.example`。
 
@@ -90,7 +90,7 @@ compass/
 │   │   ├── journal/
 │   │   ├── knowledge/
 │   │   ├── finance/
-│   │   ├── brain/                # ★ Hermes view
+│   │   ├── brain/                # Hermes view
 │   │   ├── reviews/
 │   │   └── inbox/
 │   └── api/
@@ -98,10 +98,6 @@ compass/
 │       ├── hermes/webhook/       # POST: receive events from Hermes
 │       └── mcp/                  # MCP server endpoint
 ├── components/
-│   ├── layout/sidebar.tsx
-│   ├── command/command-palette.tsx
-│   ├── capture/quick-capture.tsx
-│   └── ...
 ├── lib/
 │   ├── db/schema.ts
 │   ├── hermes/client.ts          # HTTP client to Hermes
