@@ -20,7 +20,8 @@ Available action types:
 
 - create_schedule_item — calendar/task with date/time
   fields: title (req), description, date (YYYY-MM-DD, req), startTime (HH:mm),
-          endTime (HH:mm), priority (low|medium|high), evidence
+          endTime (HH:mm), priority (low|medium|high), evidence,
+          reminderEmail, reminderMinutes
 
 - create_goal — long-running objective
   fields: title (req), description, dimension (e.g. 学习/健康/工作),
@@ -42,7 +43,9 @@ Available action types:
           date (YYYY-MM-DD), category, note
 
 - update_schedule_item / cancel_schedule_item
-  fields: id (req) + any updatable field
+  fields: id (req) + any updatable field.
+  When the user reports a task is finished, update status to "done" and include:
+  completionNote (what happened), reviewScore (0-100), reviewJson (dimension scores).
 
 - create_capture — quick inbox item the user wants to triage later
   fields: rawText (req), dimension
@@ -50,8 +53,9 @@ Available action types:
 - save_insight — your own analytical observation about the user
   fields: category (req), title (req), body (req), evidence, confidence (0-1)
 
-- save_review — periodic recap text
-  fields: period (req), title (req), body (req), startDate, endDate
+- save_review — long-term review memory
+  fields: period (task|day|week|month), title (req), body (req), summary,
+          startDate, endDate, sourceId, metrics, dimensions
 
 Required JSON shape (REPLY MUST END LIKE THIS WHEN PERSISTING):
 \`\`\`json
@@ -68,6 +72,13 @@ Rules:
 - Use ISO dates and 24h times. Use the user's timezone implied by currentTime
   in the context.
 - Do NOT echo back data Compass already has. Only emit NEW persistence intents.
+- If the user says they completed, failed, delayed, skipped, or partially
+  completed a scheduled item, treat it as execution feedback. Update the
+  matching schedule item and create a task-level review memory with quantified
+  metrics and dimension scores.
+- For weekly/monthly summaries, aggregate completion rate, consistency,
+  delay/cancel count, focus quality, and next adjustment into save_review
+  metrics/dimensions. The review is a memory layer, not a separate visible task.
 `.trim();
 
 export const dynamic = "force-dynamic";

@@ -5,6 +5,7 @@ import type { McpTool } from "@/lib/mcp/tools/types";
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_PATTERN = /^\d{2}:\d{2}$/;
 const PRIORITIES = new Set(["low", "medium", "high"]);
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function optionalString(value: unknown): string | null {
   if (value === undefined || value === null) return null;
@@ -38,6 +39,14 @@ export const createScheduleItemTool: McpTool = {
     if (!PRIORITIES.has(priorityRaw)) {
       throw new Error("priority must be low/medium/high");
     }
+    const reminderEmail = optionalString(params.reminderEmail);
+    if (reminderEmail && !EMAIL_PATTERN.test(reminderEmail)) {
+      throw new Error("reminderEmail must be a valid email address");
+    }
+    const reminderMinutesRaw = Number(params.reminderMinutes ?? 15);
+    const reminderMinutes = Number.isFinite(reminderMinutesRaw)
+      ? Math.min(1440, Math.max(0, Math.round(reminderMinutesRaw)))
+      : 15;
 
     const inserted = await db
       .insert(scheduleItems)
@@ -49,6 +58,8 @@ export const createScheduleItemTool: McpTool = {
         endTime: optionalTime(params.endTime, "endTime"),
         priority: priorityRaw,
         evidence: optionalString(params.evidence),
+        reminderEmail,
+        reminderMinutes,
         sourceMessageId: optionalString(params.sourceMessageId),
         source: optionalString(params.source) ?? "hermes",
       })

@@ -22,9 +22,16 @@ export default async function SchedulePage() {
     priority: row.priority,
     status: row.status,
     source: row.source,
+    reminderEmail: row.reminderEmail,
+    reminderMinutes: row.reminderMinutes,
+    reminderSentAt: row.reminderSentAt ? row.reminderSentAt.toISOString() : null,
+    completedAt: row.completedAt ? row.completedAt.toISOString() : null,
+    completionNote: row.completionNote,
+    reviewScore: row.reviewScore,
   }));
 
   const today = new Date().toISOString().slice(0, 10);
+  const defaultReminderEmail = process.env.COMPASS_REMINDER_EMAIL ?? "";
 
   return (
     <section className="space-y-6">
@@ -57,6 +64,22 @@ export default async function SchedulePage() {
             <option value="medium">中</option>
             <option value="low">低</option>
           </select>
+          <input
+            type="email"
+            name="reminderEmail"
+            defaultValue={defaultReminderEmail}
+            placeholder="提醒邮箱"
+            className="glass-input min-w-[220px] flex-1 !py-2 text-sm"
+          />
+          <input
+            type="number"
+            name="reminderMinutes"
+            defaultValue="15"
+            min="0"
+            max="1440"
+            className="glass-input w-28 !py-2 text-sm"
+            title="提前提醒分钟数"
+          />
           <button type="submit" className="glass-btn glass-btn-primary !py-2 text-sm">
             保存
           </button>

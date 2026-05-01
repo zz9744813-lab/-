@@ -92,6 +92,20 @@ export const reviews = sqliteTable("reviews", {
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
 });
 
+export const reviewMemories = sqliteTable("review_memories", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  period: text("period").notNull(),
+  startDate: text("start_date"),
+  endDate: text("end_date"),
+  title: text("title").notNull(),
+  summary: text("summary").notNull(),
+  metricsJson: text("metrics_json"),
+  dimensionsJson: text("dimensions_json"),
+  source: text("source").notNull().default("hermes"),
+  sourceId: text("source_id"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+});
+
 export const hermesMessages = sqliteTable("hermes_messages", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   threadId: text("thread_id"),
@@ -125,6 +139,13 @@ export const scheduleItems = sqliteTable("schedule_items", {
   source: text("source").notNull().default("hermes"),
   sourceMessageId: text("source_message_id"),
   evidence: text("evidence"),
+  reminderEmail: text("reminder_email"),
+  reminderMinutes: integer("reminder_minutes").notNull().default(15),
+  reminderSentAt: integer("reminder_sent_at", { mode: "timestamp" }),
+  completedAt: integer("completed_at", { mode: "timestamp" }),
+  completionNote: text("completion_note"),
+  reviewScore: real("review_score"),
+  reviewJson: text("review_json"),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
 });

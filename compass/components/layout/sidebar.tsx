@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Brain, CalendarClock, Goal, House, Inbox, NotebookPen, PiggyBank, RotateCcw, Settings } from "lucide-react";
+import { Brain, CalendarClock, Goal, House, Inbox, NotebookPen, PiggyBank, Settings } from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "总览", icon: House },
@@ -10,7 +10,6 @@ const NAV_ITEMS = [
   { href: "/goals", label: "目标", icon: Goal },
   { href: "/journal", label: "日记", icon: NotebookPen },
   { href: "/finance", label: "财务", icon: PiggyBank },
-  { href: "/reviews", label: "复盘", icon: RotateCcw },
   { href: "/brain", label: "大脑", icon: Brain },
   { href: "/inbox", label: "收件箱", icon: Inbox },
   { href: "/settings", label: "设置", icon: Settings },
