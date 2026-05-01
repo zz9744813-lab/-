@@ -3,6 +3,7 @@ import { db } from "@/lib/db/client";
 import { japanSources } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { ALL_JAPAN_SOURCES } from "@/lib/japan/sources";
+import { requireCronAuth } from "@/lib/server/cron-auth";
 
 export async function GET() {
   const sources = await db.select().from(japanSources).orderBy(japanSources.category);
@@ -11,11 +12,8 @@ export async function GET() {
 
 // Seed sources from whitelist
 export async function POST(req: NextRequest) {
-  const authHeader = req.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const authError = requireCronAuth(req);
+  if (authError) return authError;
 
   let seeded = 0;
   for (const src of ALL_JAPAN_SOURCES) {

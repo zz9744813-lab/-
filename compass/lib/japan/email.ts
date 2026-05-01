@@ -1,3 +1,4 @@
+import nodemailer from "nodemailer";
 import { db } from "@/lib/db/client";
 import { japanIntelEmailLogs } from "@/lib/db/schema";
 
@@ -7,6 +8,37 @@ type EmailPayload = {
   subject: string;
   bodyMarkdown: string;
 };
+
+function markdownToBasicHtml(md: string): string {
+  let html = md
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+  // Headers
+  html = html.replace(/^### (.+)$/gm, "<h3>$1</h3>");
+  html = html.replace(/^## (.+)$/gm, "<h2>$1</h2>");
+  html = html.replace(/^# (.+)$/gm, "<h1>$1</h1>");
+
+  // Bold
+  html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+
+  // Links
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+
+  // Bare URLs
+  html = html.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1">$1</a>');
+
+  // Lists
+  html = html.replace(/^- (.+)$/gm, "<li>$1</li>");
+  html = html.replace(/(<li>.*<\/li>\n?)+/g, "<ul>$&</ul>");
+
+  // Paragraphs
+  html = html.replace(/\n\n/g, "</p><p>");
+  html = `<p>${html}</p>`;
+
+  return html;
+}
 
 export async function sendJapanIntelEmail(payload: EmailPayload): Promise<{ success: boolean; error?: string }> {
   const smtpHost = process.env.COMPASS_SMTP_HOST;
@@ -22,10 +54,23 @@ export async function sendJapanIntelEmail(payload: EmailPayload): Promise<{ succ
   }
 
   try {
-    // Use nodemailer-style SMTP via fetch to a local relay or direct
-    // For now, log the email and mark as sent if SMTP is configured
-    // In production, integrate with nodemailer or similar
-    console.log(`[japan-intel] Would send email to ${payload.toEmail}: ${payload.subject}`);
+    const transporter = nodemailer.createTransport({
+      host: smtpHost,
+      port: Number(smtpPort),
+      secure: Number(smtpPort) === 465,
+      auth: {
+        user: smtpUser,
+        pass: smtpPass,
+      },
+    });
+
+    await transporter.sendMail({
+      from: smtpFrom,
+      to: payload.toEmail,
+      subject: payload.subject,
+      text: payload.bodyMarkdown,
+      html: markdownToBasicHtml(payload.bodyMarkdown),
+    });
 
     await logEmail({ ...payload, status: "sent" });
     return { success: true };

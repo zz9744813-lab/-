@@ -98,20 +98,25 @@ export function CompleteTaskDialog({
           </>
         )}
 
+        {mode !== "quick" && (
+          <p className="text-[11px] text-text-tertiary">完成或部分完成时，请至少写一句反馈；快速结束除外。</p>
+        )}
+
         <div className="flex gap-3 pt-2">
           <button onClick={onClose} className="flex-1 rounded-lg border border-white/10 bg-white/5 py-2 text-sm text-text-secondary hover:bg-white/10 transition">
             取消
           </button>
           <button
+            disabled={mode !== "quick" && note.trim().length < 4}
             onClick={() =>
               onConfirm({
-                completionNote: mode === "quick" ? "" : note,
+                completionNote: mode === "quick" ? "" : note.trim(),
                 reviewScore: score,
                 partial: mode === "partial",
                 quickComplete: mode === "quick",
               })
             }
-            className="flex-1 rounded-lg border border-accent/30 bg-accent/15 py-2 text-sm text-accent hover:bg-accent/25 transition"
+            className="flex-1 rounded-lg border border-accent/30 bg-accent/15 py-2 text-sm text-accent hover:bg-accent/25 transition disabled:opacity-40 disabled:cursor-not-allowed"
           >
             确认完成
           </button>

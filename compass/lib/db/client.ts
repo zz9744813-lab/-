@@ -156,6 +156,89 @@ CREATE TABLE IF NOT EXISTS schedule_items (
 );
 CREATE INDEX IF NOT EXISTS idx_schedule_items_date ON schedule_items(date);
 CREATE INDEX IF NOT EXISTS idx_schedule_items_status ON schedule_items(status);
+
+CREATE TABLE IF NOT EXISTS schedule_events (
+  id TEXT PRIMARY KEY NOT NULL,
+  schedule_item_id TEXT NOT NULL,
+  type TEXT NOT NULL,
+  note TEXT,
+  reason TEXT,
+  from_status TEXT,
+  to_status TEXT,
+  payload_json TEXT,
+  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+  FOREIGN KEY (schedule_item_id) REFERENCES schedule_items(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS japan_sources (
+  id TEXT PRIMARY KEY NOT NULL,
+  name TEXT NOT NULL,
+  url TEXT NOT NULL,
+  category TEXT NOT NULL,
+  authority_level TEXT NOT NULL,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  check_frequency TEXT NOT NULL DEFAULT 'daily',
+  last_checked_at INTEGER,
+  last_success_at INTEGER,
+  last_error TEXT,
+  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+  updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
+CREATE TABLE IF NOT EXISTS japan_intel_items (
+  id TEXT PRIMARY KEY NOT NULL,
+  source_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  url TEXT NOT NULL,
+  published_at INTEGER,
+  fetched_at INTEGER NOT NULL DEFAULT (unixepoch()),
+  category TEXT NOT NULL,
+  language TEXT,
+  raw_text TEXT,
+  summary_zh TEXT,
+  impact_level TEXT NOT NULL DEFAULT 'low',
+  relevance_score INTEGER NOT NULL DEFAULT 0,
+  tags_json TEXT,
+  content_hash TEXT NOT NULL,
+  is_major_update INTEGER NOT NULL DEFAULT 0,
+  is_archived INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+  FOREIGN KEY (source_id) REFERENCES japan_sources(id)
+);
+
+CREATE TABLE IF NOT EXISTS japan_intel_digests (
+  id TEXT PRIMARY KEY NOT NULL,
+  period_start TEXT NOT NULL,
+  period_end TEXT NOT NULL,
+  title TEXT NOT NULL,
+  body_markdown TEXT NOT NULL,
+  item_ids_json TEXT NOT NULL,
+  sent_at INTEGER,
+  created_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
+CREATE TABLE IF NOT EXISTS japan_intel_alerts (
+  id TEXT PRIMARY KEY NOT NULL,
+  item_id TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  severity TEXT NOT NULL,
+  sent_at INTEGER,
+  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+  FOREIGN KEY (item_id) REFERENCES japan_intel_items(id)
+);
+
+CREATE TABLE IF NOT EXISTS japan_intel_email_logs (
+  id TEXT PRIMARY KEY NOT NULL,
+  kind TEXT NOT NULL,
+  to_email TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  body_markdown TEXT NOT NULL,
+  status TEXT NOT NULL,
+  error TEXT,
+  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+  sent_at INTEGER
+);
+
 CREATE TABLE IF NOT EXISTS skills_cache (
   id TEXT PRIMARY KEY NOT NULL,
   name TEXT NOT NULL,
@@ -214,6 +297,10 @@ ensureColumn("schedule_items", "completed_at", "INTEGER");
 ensureColumn("schedule_items", "completion_note", "TEXT");
 ensureColumn("schedule_items", "review_score", "REAL");
 ensureColumn("schedule_items", "review_json", "TEXT");
+ensureColumn("schedule_items", "quick_complete", "INTEGER NOT NULL DEFAULT 0");
+ensureColumn("schedule_items", "delay_reason", "TEXT");
+ensureColumn("schedule_items", "skip_reason", "TEXT");
+ensureColumn("schedule_items", "cancel_reason", "TEXT");
 
 const timestampColumns: Record<string, string[]> = {
   captures: ["created_at"],
@@ -229,6 +316,12 @@ const timestampColumns: Record<string, string[]> = {
   hermes_messages: ["created_at"],
   insights: ["created_at"],
   schedule_items: ["reminder_sent_at", "completed_at", "created_at", "updated_at"],
+  schedule_events: ["created_at"],
+  japan_sources: ["last_checked_at", "last_success_at", "created_at", "updated_at"],
+  japan_intel_items: ["published_at", "fetched_at", "created_at"],
+  japan_intel_digests: ["sent_at", "created_at"],
+  japan_intel_alerts: ["sent_at", "created_at"],
+  japan_intel_email_logs: ["created_at", "sent_at"],
   skills_cache: ["created_at", "synced_at"],
   app_settings: ["updated_at"],
   duolingo_snapshots: ["synced_at"],

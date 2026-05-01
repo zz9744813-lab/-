@@ -3,14 +3,12 @@ import { db } from "@/lib/db/client";
 import { japanSources, japanIntelItems } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { fetchFromSource } from "@/lib/japan/fetchers";
+import { summarizeJapanIntelItem } from "@/lib/japan/summarizer";
+import { requireCronAuth } from "@/lib/server/cron-auth";
 
 export async function POST(req: NextRequest) {
-  const authHeader = req.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET;
-
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const authError = requireCronAuth(req);
+  if (authError) return authError;
 
   const results: { sourceId: string; fetched: number; new: number; error?: string }[] = [];
 
@@ -31,6 +29,15 @@ export async function POST(req: NextRequest) {
 
         if (existing.length > 0) continue;
 
+        const summaryZh = summarizeJapanIntelItem({
+          title: item.title,
+          rawText: item.rawText,
+          category: item.category,
+          impactLevel: item.impactLevel,
+          isMajorUpdate: item.isMajorUpdate,
+          url: item.url,
+        });
+
         await db.insert(japanIntelItems).values({
           sourceId: item.sourceId,
           title: item.title,
@@ -42,6 +49,7 @@ export async function POST(req: NextRequest) {
           contentHash: item.contentHash,
           impactLevel: item.impactLevel,
           isMajorUpdate: item.isMajorUpdate,
+          summaryZh,
         });
         newCount++;
       }

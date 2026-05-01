@@ -3,13 +3,11 @@ import { generateWeeklyDigest } from "@/lib/japan/digest";
 import { sendJapanIntelEmail } from "@/lib/japan/email";
 import { db } from "@/lib/db/client";
 import { japanIntelDigests } from "@/lib/db/schema";
+import { requireCronAuth } from "@/lib/server/cron-auth";
 
 export async function POST(req: NextRequest) {
-  const authHeader = req.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const authError = requireCronAuth(req);
+  if (authError) return authError;
 
   const toEmail = process.env.COMPASS_INTEL_EMAIL_TO;
   if (!toEmail) {

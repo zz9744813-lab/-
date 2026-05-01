@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db/client";
 import { japanIntelItems, japanSources } from "@/lib/db/schema";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, inArray } from "drizzle-orm";
+
+const CATEGORY_MAP: Record<string, string[]> = {
+  visa: ["visa", "visa-policy", "visa-cn", "consular", "work-labor", "policy"],
+  study: ["study", "education-policy", "exam"],
+  jobs: ["jobs", "business-jobs", "tech-jobs", "company-jobs", "industry"],
+};
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -18,6 +24,12 @@ export async function GET(req: NextRequest) {
   }
   if (majorOnly === "true") {
     conditions.push(eq(japanIntelItems.isMajorUpdate, true));
+  }
+
+  // Category filter using mapped categories
+  const mappedCategories = category ? CATEGORY_MAP[category] : undefined;
+  if (mappedCategories && mappedCategories.length > 0) {
+    conditions.push(inArray(japanIntelItems.category, mappedCategories));
   }
 
   const where = conditions.length > 0 ? and(...conditions) : undefined;
@@ -47,8 +59,5 @@ export async function GET(req: NextRequest) {
     .orderBy(desc(japanIntelItems.isMajorUpdate), desc(japanIntelItems.createdAt))
     .limit(limit);
 
-  // Filter by category in JS since it's in the items table
-  const filtered = category ? items.filter((i) => i.category.includes(category)) : items;
-
-  return NextResponse.json({ items: filtered });
+  return NextResponse.json({ items });
 }

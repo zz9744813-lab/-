@@ -21,14 +21,15 @@ export type FetchedItem = {
   isMajorUpdate: boolean;
 };
 
-// Fetch HTML and extract links/text from common announcement list patterns
+const USER_AGENT = "CompassBot/1.0 (Japan Intel; personal monitoring)";
+
 async function fetchHtml(url: string, timeoutMs = 15000): Promise<string> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(url, {
       signal: controller.signal,
-      headers: { "User-Agent": "CompassBot/1.0 (Japan Intel)" },
+      headers: { "User-Agent": USER_AGENT },
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.text();
@@ -37,7 +38,46 @@ async function fetchHtml(url: string, timeoutMs = 15000): Promise<string> {
   }
 }
 
-// Basic link extraction from HTML
+function extractReadableText(html: string): string {
+  // Remove script, style, nav, footer, header tags and their content
+  let cleaned = html.replace(/<script[\s\S]*?<\/script>/gi, "");
+  cleaned = cleaned.replace(/<style[\s\S]*?<\/style>/gi, "");
+  cleaned = cleaned.replace(/<nav[\s\S]*?<\/nav>/gi, "");
+  cleaned = cleaned.replace(/<footer[\s\S]*?<\/footer>/gi, "");
+  cleaned = cleaned.replace(/<header[\s\S]*?<\/header>/gi, "");
+  cleaned = cleaned.replace(/<aside[\s\S]*?<\/aside>/gi, "");
+
+  // Remove HTML tags
+  cleaned = cleaned.replace(/<[^>]+>/g, " ");
+
+  // Decode HTML entities
+  cleaned = cleaned.replace(/&amp;/g, "&");
+  cleaned = cleaned.replace(/&lt;/g, "<");
+  cleaned = cleaned.replace(/&gt;/g, ">");
+  cleaned = cleaned.replace(/&quot;/g, '"');
+  cleaned = cleaned.replace(/&#39;/g, "'");
+  cleaned = cleaned.replace(/&nbsp;/g, " ");
+
+  // Collapse whitespace
+  cleaned = cleaned.replace(/\s+/g, " ").trim();
+
+  // Truncate to 8000 chars
+  if (cleaned.length > 8000) {
+    cleaned = cleaned.slice(0, 8000) + "…";
+  }
+
+  return cleaned;
+}
+
+async function fetchDetailText(url: string): Promise<string | null> {
+  try {
+    const html = await fetchHtml(url, 10000);
+    return extractReadableText(html);
+  } catch {
+    return null;
+  }
+}
+
 function extractLinks(html: string, baseUrl: string): { title: string; url: string }[] {
   const links: { title: string; url: string }[] = [];
   const regex = /<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
@@ -59,11 +99,9 @@ function extractLinks(html: string, baseUrl: string): { title: string; url: stri
   return links;
 }
 
-// Try RSS/Atom feed parsing
 function parseRssItems(xml: string): { title: string; url: string; publishedAt: Date | null }[] {
   const items: { title: string; url: string; publishedAt: Date | null }[] = [];
 
-  // Simple RSS/Atom item extraction
   const itemRegex = /<item>([\s\S]*?)<\/item>/gi;
   let match;
   while ((match = itemRegex.exec(xml)) !== null) {
@@ -77,15 +115,10 @@ function parseRssItems(xml: string): { title: string; url: string; publishedAt: 
       ?? null;
 
     if (title && link) {
-      items.push({
-        title,
-        url: link,
-        publishedAt: pubDate ? new Date(pubDate) : null,
-      });
+      items.push({ title, url: link, publishedAt: pubDate ? new Date(pubDate) : null });
     }
   }
 
-  // Atom entries
   const entryRegex = /<entry>([\s\S]*?)<\/entry>/gi;
   while ((match = entryRegex.exec(xml)) !== null) {
     const block = match[1];
@@ -94,11 +127,7 @@ function parseRssItems(xml: string): { title: string; url: string; publishedAt: 
     const updated = block.match(/<updated[^>]*>([\s\S]*?)<\/updated>/i)?.[1]?.trim() ?? null;
 
     if (title && link) {
-      items.push({
-        title,
-        url: link,
-        publishedAt: updated ? new Date(updated) : null,
-      });
+      items.push({ title, url: link, publishedAt: updated ? new Date(updated) : null });
     }
   }
 
@@ -113,38 +142,28 @@ export async function fetchFromSource(source: FetchableSource): Promise<FetchedI
 
     // Try RSS first
     const rssItems = parseRssItems(html);
-    if (rssItems.length > 0) {
-      for (const ri of rssItems.slice(0, 20)) {
-        const classification = classifyIntelItem(ri.title, source.authorityLevel, source.category);
-        items.push({
-          sourceId: source.id,
-          title: ri.title,
-          url: ri.url,
-          publishedAt: ri.publishedAt,
-          category: source.category,
-          language: ri.title.match(/[　-鿿]/) ? "ja" : "en",
-          rawText: ri.title,
-          contentHash: computeContentHash(source.id, ri.title, ri.url, ri.publishedAt?.toISOString() ?? null),
-          impactLevel: classification.impactLevel,
-          isMajorUpdate: classification.isMajorUpdate,
-        });
-      }
-      return items;
-    }
+    const candidates = rssItems.length > 0
+      ? rssItems.slice(0, 20)
+      : extractLinks(html, source.url).slice(0, 20);
 
-    // Fallback: extract links from HTML
-    const links = extractLinks(html, source.url);
-    for (const link of links.slice(0, 20)) {
-      const classification = classifyIntelItem(link.title, source.authorityLevel, source.category);
+    for (const candidate of candidates) {
+      // Fetch detail page for richer content
+      let rawText = candidate.title;
+      const detailText = await fetchDetailText(candidate.url);
+      if (detailText && detailText.length > candidate.title.length) {
+        rawText = candidate.title + "\n\n" + detailText;
+      }
+
+      const classification = classifyIntelItem(rawText, source.authorityLevel, source.category);
       items.push({
         sourceId: source.id,
-        title: link.title,
-        url: link.url,
-        publishedAt: null,
+        title: candidate.title,
+        url: candidate.url,
+        publishedAt: candidate.publishedAt ?? null,
         category: source.category,
-        language: link.title.match(/[　-鿿]/) ? "ja" : "en",
-        rawText: link.title,
-        contentHash: computeContentHash(source.id, link.title, link.url, null),
+        language: rawText.match(/[　-鿿]/) ? "ja" : "en",
+        rawText,
+        contentHash: computeContentHash(source.id, candidate.title, candidate.url, candidate.publishedAt?.toISOString() ?? null),
         impactLevel: classification.impactLevel,
         isMajorUpdate: classification.isMajorUpdate,
       });
