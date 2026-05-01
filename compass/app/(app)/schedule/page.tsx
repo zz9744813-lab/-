@@ -1,5 +1,6 @@
-import { asc, eq, and } from "drizzle-orm";
-import { ScheduleBoard, type ScheduleCardItem } from "@/components/schedule/schedule-board";
+import { asc } from "drizzle-orm";
+import { ScheduleBoard } from "@/components/schedule/schedule-board";
+import { type ScheduleCardItem } from "@/components/schedule/schedule-card";
 import { TodayFocusPanel, type TodayStats } from "@/components/schedule/today-focus-panel";
 import { createScheduleAction } from "@/lib/actions/schedule";
 import { db } from "@/lib/db/client";
