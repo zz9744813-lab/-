@@ -76,6 +76,25 @@ export function BrainChatPanel({
   const scrollRef = useRef<HTMLDivElement>(null);
   const canSubmit = !disabled && !isSending && (message.trim().length > 0 || files.length > 0);
 
+  async function loadMessages() {
+    try {
+      const response = await fetch("/api/brain/messages?limit=40", { cache: "no-store" });
+      const payload = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        messages?: BrainChatMessageView[];
+      };
+      if (response.ok && payload.ok && Array.isArray(payload.messages)) {
+        setMessages(payload.messages);
+      }
+    } catch {
+      // Keep the server-rendered messages if history refresh is unavailable.
+    }
+  }
+
+  useEffect(() => {
+    void loadMessages();
+  }, []);
+
   useEffect(() => {
     const node = scrollRef.current;
     if (!node) return;
@@ -144,6 +163,7 @@ export function BrainChatPanel({
       const payload = (await response.json().catch(() => ({}))) as {
         ok?: boolean;
         error?: string;
+        userMessage?: BrainChatMessageView;
         assistantMessage?: BrainChatMessageView;
       };
 
@@ -151,7 +171,12 @@ export function BrainChatPanel({
         throw new Error(payload.error ?? `请求失败：HTTP ${response.status}`);
       }
 
-      setMessages((current) => [...current, payload.assistantMessage as BrainChatMessageView]);
+      setMessages((current) => {
+        const withoutLocal = current.filter((item) => item.id !== localUser.id);
+        const next = payload.userMessage ? [...withoutLocal, payload.userMessage] : withoutLocal;
+        return [...next, payload.assistantMessage as BrainChatMessageView];
+      });
+      void loadMessages();
     } catch (err) {
       const textError = err instanceof Error ? err.message : "发送失败";
       setError(textError);
