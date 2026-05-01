@@ -14,6 +14,13 @@ export async function POST(req: NextRequest) {
 
   const sources = await db.select().from(japanSources).where(eq(japanSources.enabled, true));
 
+  if (sources.length === 0) {
+    return NextResponse.json(
+      { ok: false, error: "No Japan Intel sources configured. Seed sources first." },
+      { status: 400 },
+    );
+  }
+
   for (const source of sources) {
     try {
       const items = await fetchFromSource(source);

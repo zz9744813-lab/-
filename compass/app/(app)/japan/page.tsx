@@ -12,7 +12,9 @@ import {
   RefreshCw,
   ExternalLink,
   Target,
-  Mail,
+  Loader2,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 
 type IntelItem = {
@@ -73,64 +75,166 @@ const AUTHORITY_BADGE: Record<string, { label: string; cls: string }> = {
 export default function JapanIntelPage() {
   const [tab, setTab] = useState("all");
   const [items, setItems] = useState<IntelItem[]>([]);
+  const [allItems, setAllItems] = useState<IntelItem[]>([]);
   const [sources, setSources] = useState<Source[]>([]);
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(false);
   const [seeding, setSeeding] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [lastCheckResult, setLastCheckResult] = useState<{ totalNew: number; errors: number } | null>(null);
+
+  const loadSources = useCallback(async () => {
+    try {
+      const res = await fetch("/api/japan/sources");
+      const data = await res.json();
+      setSources(data.sources ?? []);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const loadAllItems = useCallback(async () => {
+    try {
+      const res = await fetch("/api/japan/items?limit=100");
+      const data = await res.json();
+      setAllItems(data.items ?? []);
+    } catch {
+      // ignore
+    }
+  }, []);
 
   const loadItems = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const params = new URLSearchParams();
       if (tab === "major") params.set("major", "true");
       if (tab === "archived") params.set("archived", "true");
       if (tab === "visa") params.set("category", "visa");
-      if (tab === "study") params.set("category", "exam");
+      if (tab === "study") params.set("category", "study");
       if (tab === "jobs") params.set("category", "jobs");
 
       const res = await fetch(`/api/japan/items?${params}`);
       const data = await res.json();
       setItems(data.items ?? []);
-    } catch (err) {
-      console.error("Failed to load items:", err);
+    } catch {
+      setError("加载情报失败");
     }
     setLoading(false);
   }, [tab]);
 
-  const loadSources = useCallback(async () => {
-    const res = await fetch("/api/japan/sources");
-    const data = await res.json();
-    setSources(data.sources ?? []);
-  }, []);
-
+  // Initial load: fetch sources + all items
   useEffect(() => {
-    if (tab === "sources") {
-      loadSources();
-    } else {
+    loadSources();
+    loadAllItems();
+  }, [loadSources, loadAllItems]);
+
+  // Load filtered items when tab changes
+  useEffect(() => {
+    if (tab !== "sources") {
       loadItems();
     }
-  }, [tab, loadItems, loadSources]);
-
-  const handleCheck = async () => {
-    setChecking(true);
-    await fetch("/api/japan/check", { method: "POST" });
-    await loadItems();
-    setChecking(false);
-  };
+  }, [tab, loadItems]);
 
   const handleSeed = async () => {
     setSeeding(true);
-    await fetch("/api/japan/sources", { method: "POST" });
-    await loadSources();
+    setError(null);
+    try {
+      const res = await fetch("/api/japan/sources", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "初始化失败");
+      }
+      await loadSources();
+    } catch {
+      setError("初始化来源失败");
+    }
     setSeeding(false);
   };
 
-  // Stats
+  const handleCheck = async () => {
+    setChecking(true);
+    setError(null);
+    setLastCheckResult(null);
+
+    try {
+      // Auto-seed if no sources
+      if (sources.length === 0) {
+        const seedRes = await fetch("/api/japan/sources", { method: "POST" });
+        const seedData = await seedRes.json();
+        if (!seedRes.ok) {
+          setError(seedData.error ?? "初始化来源失败");
+          setChecking(false);
+          return;
+        }
+        await loadSources();
+      }
+
+      const res = await fetch("/api/japan/check", { method: "POST" });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error ?? "检查失败");
+      } else {
+        setLastCheckResult({ totalNew: data.totalNew, errors: data.errors });
+      }
+
+      await loadItems();
+      await loadAllItems();
+      await loadSources();
+    } catch {
+      setError("检查请求失败");
+    }
+
+    setChecking(false);
+  };
+
+  const handleSeedAndCheck = async () => {
+    setSeeding(true);
+    setChecking(true);
+    setError(null);
+    setLastCheckResult(null);
+
+    try {
+      // Seed first
+      const seedRes = await fetch("/api/japan/sources", { method: "POST" });
+      const seedData = await seedRes.json();
+      if (!seedRes.ok) {
+        setError(seedData.error ?? "初始化来源失败");
+        setSeeding(false);
+        setChecking(false);
+        return;
+      }
+      setSeeding(false);
+      await loadSources();
+
+      // Then check
+      const checkRes = await fetch("/api/japan/check", { method: "POST" });
+      const checkData = await checkRes.json();
+
+      if (!checkRes.ok) {
+        setError(checkData.error ?? "检查失败");
+      } else {
+        setLastCheckResult({ totalNew: checkData.totalNew, errors: checkData.errors });
+      }
+
+      await loadItems();
+      await loadAllItems();
+      await loadSources();
+    } catch {
+      setError("操作失败");
+    }
+
+    setSeeding(false);
+    setChecking(false);
+  };
+
+  // Stats from ALL items (not just current tab)
   const now = new Date();
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const weekItems = items.filter((i) => new Date(i.createdAt) >= weekAgo);
-  const majorCount = items.filter((i) => i.isMajorUpdate).length;
-  const jobCount = items.filter((i) => i.category.includes("jobs")).length;
+  const weekItems = allItems.filter((i) => new Date(i.createdAt) >= weekAgo);
+  const majorCount = allItems.filter((i) => i.isMajorUpdate).length;
+  const jobCount = allItems.filter((i) => i.category.includes("jobs") || i.category.includes("tech-jobs") || i.category.includes("company-jobs")).length;
 
   return (
     <section className="space-y-6">
@@ -148,6 +252,20 @@ export default function JapanIntelPage() {
         <StatCard label="招聘匹配" value={jobCount} />
         <StatCard label="数据源" value={sources.length || "—"} />
       </div>
+
+      {/* Status messages */}
+      {error && (
+        <div className="glass p-3 flex items-center gap-2 text-sm text-red-300 border-red-400/20">
+          <XCircle size={14} />
+          {error}
+        </div>
+      )}
+      {lastCheckResult && !error && (
+        <div className="glass p-3 flex items-center gap-2 text-sm text-emerald-200 border-emerald-400/20">
+          <CheckCircle2 size={14} />
+          检查完成：新增 {lastCheckResult.totalNew} 条{lastCheckResult.errors > 0 ? `，${lastCheckResult.errors} 个来源失败` : ""}
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex flex-wrap gap-2 animate-fade-rise-delay">
@@ -167,7 +285,7 @@ export default function JapanIntelPage() {
         ))}
         <button
           onClick={handleCheck}
-          disabled={checking}
+          disabled={checking || seeding}
           className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-text-secondary hover:bg-white/10 transition disabled:opacity-50"
         >
           <RefreshCw size={14} className={checking ? "animate-spin" : ""} />
@@ -180,11 +298,18 @@ export default function JapanIntelPage() {
         {tab === "sources" ? (
           <SourcesList sources={sources} onSeed={handleSeed} seeding={seeding} />
         ) : loading ? (
-          <div className="glass p-10 text-center text-sm text-text-secondary">加载中…</div>
-        ) : items.length === 0 ? (
           <div className="glass p-10 text-center text-sm text-text-secondary">
-            暂无情报。点击&ldquo;手动检查&rdquo;开始抓取，或点击&ldquo;数据源&rdquo;初始化来源。
+            <Loader2 size={16} className="animate-spin inline-block mr-2" />
+            加载中…
           </div>
+        ) : items.length === 0 ? (
+          <EmptyState
+            hasSources={sources.length > 0}
+            seeding={seeding}
+            checking={checking}
+            onSeed={handleSeed}
+            onSeedAndCheck={handleSeedAndCheck}
+          />
         ) : (
           <div className="space-y-3">
             {items.map((item) => (
@@ -194,6 +319,50 @@ export default function JapanIntelPage() {
         )}
       </div>
     </section>
+  );
+}
+
+function EmptyState({
+  hasSources,
+  seeding,
+  checking,
+  onSeed,
+  onSeedAndCheck,
+}: {
+  hasSources: boolean;
+  seeding: boolean;
+  checking: boolean;
+  onSeed: () => void;
+  onSeedAndCheck: () => void;
+}) {
+  return (
+    <div className="glass p-10 text-center space-y-4">
+      <div className="text-sm text-text-secondary">
+        {hasSources
+          ? "当前筛选条件下暂无情报。尝试切换标签或手动检查。"
+          : "尚未初始化权威来源。点击下方按钮开始。"}
+      </div>
+      <div className="flex items-center justify-center gap-3">
+        {!hasSources && (
+          <button
+            onClick={onSeed}
+            disabled={seeding}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm text-text-secondary hover:bg-white/10 transition disabled:opacity-50"
+          >
+            {seeding ? <Loader2 size={14} className="animate-spin" /> : <Database size={14} />}
+            {seeding ? "初始化中…" : "初始化权威来源"}
+          </button>
+        )}
+        <button
+          onClick={onSeedAndCheck}
+          disabled={seeding || checking}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-accent/30 bg-accent/15 px-4 py-2 text-sm text-accent hover:bg-accent/25 transition disabled:opacity-50"
+        >
+          {seeding || checking ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+          {seeding ? "初始化中…" : checking ? "检查中…" : "初始化并立即检查"}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -226,7 +395,7 @@ function IntelItemCard({ item }: { item: IntelItem }) {
             )}
           </div>
           <h3 className="text-sm font-medium text-text-primary">{item.title}</h3>
-          {item.summaryZh && <p className="text-xs text-text-secondary mt-1">{item.summaryZh}</p>}
+          {item.summaryZh && <p className="text-xs text-text-secondary mt-1 whitespace-pre-wrap">{item.summaryZh}</p>}
           <div className="flex items-center gap-3 mt-2 text-[11px] text-text-tertiary">
             {item.sourceName && <span>{item.sourceName}</span>}
             {item.publishedAt && <span>{new Date(item.publishedAt).toLocaleDateString("zh-CN")}</span>}
@@ -264,12 +433,13 @@ function SourcesList({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-text-secondary">数据源管理</p>
+        <p className="text-sm text-text-secondary">数据源管理 · {sources.length} 个来源</p>
         <button
           onClick={onSeed}
           disabled={seeding}
           className="inline-flex items-center gap-1.5 rounded-lg border border-accent/30 bg-accent/10 px-3 py-1.5 text-xs text-accent hover:bg-accent/20 transition disabled:opacity-50"
         >
+          {seeding ? <Loader2 size={12} className="animate-spin" /> : null}
           {seeding ? "初始化中…" : "初始化白名单"}
         </button>
       </div>
@@ -283,8 +453,8 @@ function SourcesList({
           return (
             <div key={src.id} className="glass p-4">
               <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <h3 className="text-sm font-medium">{src.name}</h3>
                     <span className={`rounded-full border px-2 py-0.5 text-[11px] ${auth.cls}`}>{auth.label}</span>
                     {!src.enabled && (
@@ -294,18 +464,25 @@ function SourcesList({
                     )}
                   </div>
                   <p className="text-xs text-text-tertiary">{src.category}</p>
-                  {src.lastError && <p className="text-xs text-red-300 mt-1">错误: {src.lastError}</p>}
-                  {src.lastCheckedAt && (
-                    <p className="text-[11px] text-text-tertiary mt-1">
-                      上次检查: {new Date(src.lastCheckedAt).toLocaleString("zh-CN")}
-                    </p>
-                  )}
+                  <div className="flex items-center gap-3 mt-1 flex-wrap">
+                    {src.lastCheckedAt && (
+                      <span className="text-[11px] text-text-tertiary">
+                        检查: {new Date(src.lastCheckedAt).toLocaleString("zh-CN")}
+                      </span>
+                    )}
+                    {src.lastSuccessAt && (
+                      <span className="text-[11px] text-emerald-300">
+                        成功: {new Date(src.lastSuccessAt).toLocaleString("zh-CN")}
+                      </span>
+                    )}
+                  </div>
+                  {src.lastError && <p className="text-xs text-red-300 mt-1 truncate">错误: {src.lastError}</p>}
                 </div>
                 <a
                   href={src.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-text-secondary hover:bg-white/10 transition"
+                  className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-text-secondary hover:bg-white/10 transition shrink-0"
                 >
                   <ExternalLink size={11} />
                   访问

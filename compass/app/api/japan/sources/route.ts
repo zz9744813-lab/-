@@ -30,5 +30,6 @@ export async function POST(req: NextRequest) {
     seeded++;
   }
 
-  return NextResponse.json({ ok: true, seeded });
+  const totalSources = await db.select().from(japanSources);
+  return NextResponse.json({ ok: true, seeded, totalSources: totalSources.length });
 }
