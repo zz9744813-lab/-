@@ -316,9 +316,14 @@ export function BrainChatPanel({
       setMessages((current) => {
         const withoutLocal = current.filter((item) => item.id !== localUser.id);
         const next = payload.userMessage ? [...withoutLocal, payload.userMessage] : withoutLocal;
-        const assistantMsg = {
-          ...payload.assistantMessage,
-          compassActions: payload.compassActions ?? payload.assistantMessage?.compassActions ?? [],
+        const am = payload.assistantMessage!;
+        const assistantMsg: BrainChatMessageView = {
+          id: am.id,
+          role: am.role,
+          content: am.content,
+          createdAt: am.createdAt,
+          attachments: am.attachments ?? [],
+          compassActions: payload.compassActions ?? am.compassActions ?? [],
         };
         return [...next, assistantMsg];
       });
