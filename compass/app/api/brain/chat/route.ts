@@ -104,11 +104,19 @@ type AttachmentForContext = {
   name: string;
   type: string;
   size: number;
-  kind: "image" | "text" | "pdf" | "file";
+  kind: "image" | "text" | "pdf" | "docx" | "file";
   excerpt?: string;
   dataUrl?: string;
   warning?: string;
 };
+
+const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+async function extractDocxText(buffer: Buffer): Promise<string> {
+  const mammoth: typeof import("mammoth") = await import("mammoth");
+  const result = await mammoth.extractRawText({ buffer });
+  return truncateText(result.value || "");
+}
 
 function extensionOf(name: string) {
   const parts = name.toLowerCase().split(".");
@@ -178,6 +186,24 @@ async function summarizeFile(file: File): Promise<AttachmentForContext> {
       excerpt: excerpt || "未能从 PDF 中提取到可读文本，已发送文件元数据。",
       warning: excerpt ? undefined : "PDF 可能是扫描件或使用了压缩编码。",
     };
+  }
+
+  if (type === DOCX_MIME || extensionOf(file.name) === "docx") {
+    try {
+      const excerpt = await extractDocxText(buffer);
+      return {
+        ...base,
+        kind: "docx",
+        excerpt: excerpt || "Word 文档中未提取到可读文本。",
+        warning: excerpt ? undefined : "文档可能包含图片或不可解析的内容。",
+      };
+    } catch (error) {
+      return {
+        ...base,
+        kind: "docx",
+        warning: `Word 文档解析失败：${error instanceof Error ? error.message : "未知错误"}`,
+      };
+    }
   }
 
   if (isTextLike(file)) {
