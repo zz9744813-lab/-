@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
-import { FileText, ImagePlus, Loader2, Paperclip, Send, Sparkles, UploadCloud, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, FileText, ImagePlus, Loader2, Paperclip, Send, Sparkles, UploadCloud, X } from "lucide-react";
 
 export type BrainChatAttachmentView = {
   id?: string;
@@ -13,12 +13,20 @@ export type BrainChatAttachmentView = {
   warning?: string;
 };
 
+export type BrainChatActionResultView = {
+  type: string;
+  ok: boolean;
+  result?: unknown;
+  error?: string;
+};
+
 export type BrainChatMessageView = {
   id: string;
   role: "user" | "assistant";
   content: string;
   createdAt: string;
   attachments?: BrainChatAttachmentView[];
+  compassActions?: BrainChatActionResultView[];
 };
 
 type BrainChatPanelProps = {
@@ -34,6 +42,37 @@ function formatBytes(size: number) {
   if (size < 1024) return `${size} B`;
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
+const ACTION_LABELS: Record<string, string> = {
+  create_schedule_item: "日程",
+  update_schedule_item: "日程更新",
+  cancel_schedule_item: "日程取消",
+  create_goal: "目标",
+  update_goal: "目标更新",
+  create_journal_entry: "日记",
+  update_journal_entry: "日记更新",
+  create_finance_transaction: "记账",
+  create_capture: "收件箱",
+  save_insight: "洞察",
+  save_review: "复盘",
+};
+
+function summarizeActions(actions: BrainChatActionResultView[]) {
+  const okCounts = new Map<string, number>();
+  const failures: BrainChatActionResultView[] = [];
+  for (const action of actions) {
+    if (action.ok) {
+      okCounts.set(action.type, (okCounts.get(action.type) ?? 0) + 1);
+    } else {
+      failures.push(action);
+    }
+  }
+  const okSummary = Array.from(okCounts.entries()).map(([type, count]) => {
+    const label = ACTION_LABELS[type] ?? type;
+    return `${label} × ${count}`;
+  });
+  return { okSummary, failures };
 }
 
 function nowLabel() {
@@ -165,16 +204,21 @@ export function BrainChatPanel({
         error?: string;
         userMessage?: BrainChatMessageView;
         assistantMessage?: BrainChatMessageView;
+        compassActions?: BrainChatActionResultView[];
       };
 
       if (!response.ok || !payload.ok || !payload.assistantMessage) {
         throw new Error(payload.error ?? `请求失败：HTTP ${response.status}`);
       }
 
+      const assistant: BrainChatMessageView = {
+        ...(payload.assistantMessage as BrainChatMessageView),
+        compassActions: payload.compassActions,
+      };
       setMessages((current) => {
         const withoutLocal = current.filter((item) => item.id !== localUser.id);
         const next = payload.userMessage ? [...withoutLocal, payload.userMessage] : withoutLocal;
-        return [...next, payload.assistantMessage as BrainChatMessageView];
+        return [...next, assistant];
       });
       void loadMessages();
     } catch (err) {
@@ -263,6 +307,43 @@ export function BrainChatPanel({
                     </span>
                   ))}
                 </div>
+              ) : null}
+              {item.compassActions && item.compassActions.length > 0 ? (
+                (() => {
+                  const { okSummary, failures } = summarizeActions(item.compassActions);
+                  if (okSummary.length === 0 && failures.length === 0) return null;
+                  return (
+                    <div className="mt-3 space-y-1.5 rounded-md border border-border bg-bg-surface/60 p-2.5 text-xs">
+                      {okSummary.length > 0 ? (
+                        <div className="flex flex-wrap items-center gap-1.5 text-text-secondary">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                          <span>已写入 Compass：</span>
+                          {okSummary.map((label) => (
+                            <span
+                              key={label}
+                              className="inline-flex items-center rounded border border-emerald-400/30 bg-emerald-500/10 px-1.5 py-0.5 text-emerald-200"
+                            >
+                              {label}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                      {failures.length > 0 ? (
+                        <div className="flex flex-col gap-1 text-amber-200">
+                          {failures.map((failure, index) => (
+                            <div key={`${item.id}-fail-${index}`} className="flex items-start gap-1.5">
+                              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" />
+                              <span>
+                                <span className="font-medium">{ACTION_LABELS[failure.type] ?? failure.type}</span>
+                                <span className="text-amber-300/80"> 写入失败：{failure.error ?? "未知错误"}</span>
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })()
               ) : null}
             </div>
           ))
