@@ -6,6 +6,7 @@ import { loadBrainConfigFromStore } from "@/lib/brain/settings-store";
 import { db } from "@/lib/db/client";
 import { reviews } from "@/lib/db/schema";
 import { formatDateTime, todayDateInputValue } from "@/lib/datetime";
+import { formatReviewBody, formatReviewTitle } from "@/lib/reviews/format";
 
 export const dynamic = "force-dynamic";
 
@@ -18,19 +19,6 @@ function periodLabel(value: string) {
 
 function sourceLabel(value: string) {
   return SOURCE_LABELS[value] ?? value;
-}
-
-function isBrokenQuestionText(value: string | null | undefined) {
-  if (!value) return false;
-  const compact = value.replace(/\s/g, "");
-  return compact.length > 0 && /^\?+$/.test(compact);
-}
-
-function reviewTitle(title: string, source: string) {
-  if (isBrokenQuestionText(title) || title.includes("?".repeat(4))) {
-    return source === "hermes" ? "Hermes 自动复盘" : "手动复盘";
-  }
-  return title;
 }
 
 async function createReview(formData: FormData) {
@@ -132,14 +120,14 @@ export default async function ReviewsPage() {
             <article key={review.id} className="rounded-lg border border-border bg-bg-surface p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <h3 className="font-semibold">{reviewTitle(review.title, review.source)}</h3>
+                  <h3 className="font-semibold">{formatReviewTitle(review.title, review.source)}</h3>
                   <p className="mt-1 text-xs text-text-secondary">
                     {periodLabel(review.period)} · {sourceLabel(review.source)} · {formatDateTime(review.createdAt)}
                     {review.startDate || review.endDate ? ` · ${review.startDate ?? "未设置"} ~ ${review.endDate ?? "未设置"}` : ""}
                   </p>
                 </div>
               </div>
-              <p className="mt-3 whitespace-pre-wrap text-sm text-text-secondary">{review.body}</p>
+              <p className="mt-3 whitespace-pre-wrap text-sm text-text-secondary">{formatReviewBody(review.body)}</p>
             </article>
           ))}
         </div>

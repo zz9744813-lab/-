@@ -1,7 +1,7 @@
 "use client";
 
-import { FormEvent, useRef, useState } from "react";
-import { FileText, ImagePlus, Loader2, Paperclip, Send, X } from "lucide-react";
+import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
+import { FileText, ImagePlus, Loader2, Paperclip, Send, Sparkles, UploadCloud, X } from "lucide-react";
 
 export type BrainChatAttachmentView = {
   id?: string;
@@ -72,21 +72,46 @@ export function BrainChatPanel({
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const canSubmit = !disabled && !isSending && (message.trim().length > 0 || files.length > 0);
+
+  useEffect(() => {
+    const node = scrollRef.current;
+    if (!node) return;
+    node.scrollTo({ top: node.scrollHeight, behavior: "smooth" });
+  }, [messages.length, isSending]);
+
+  useEffect(() => {
+    const node = textareaRef.current;
+    if (!node) return;
+    node.style.height = "auto";
+    node.style.height = `${Math.min(node.scrollHeight, 180)}px`;
+  }, [message]);
 
   function addFiles(fileList: FileList | null) {
-    if (!fileList) return;
+    if (!fileList || disabled) return;
     const incoming = Array.from(fileList).filter((file) => file.size > 0);
     if (incoming.length === 0) return;
+
     setFiles((current) => {
-      const merged = [...current, ...incoming];
       const unique = new Map<string, File>();
-      for (const item of merged) unique.set(`${item.name}-${item.size}-${item.lastModified}`, item);
-      return Array.from(unique.values()).slice(0, 8);
+      for (const item of [...current, ...incoming]) unique.set(`${item.name}-${item.size}-${item.lastModified}`, item);
+      const next = Array.from(unique.values());
+      if (next.length > 8) setError("最多保留 8 个附件。");
+      else setError(null);
+      return next.slice(0, 8);
     });
   }
 
   function removeFile(index: number) {
     setFiles((current) => current.filter((_, itemIndex) => itemIndex !== index));
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
+    event.preventDefault();
+    if (canSubmit) formRef.current?.requestSubmit();
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -147,7 +172,7 @@ export function BrainChatPanel({
 
   return (
     <article
-      className={`glass p-6 ${className}`}
+      className={`glass glass-strong p-6 ${className}`}
       onDragEnter={(event) => {
         event.preventDefault();
         if (!disabled) setIsDragging(true);
@@ -163,12 +188,15 @@ export function BrainChatPanel({
       onDrop={(event) => {
         event.preventDefault();
         setIsDragging(false);
-        if (!disabled) addFiles(event.dataTransfer.files);
+        addFiles(event.dataTransfer.files);
       }}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold">Hermes 对话</h2>
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-accent" />
+            <h2 className="text-lg font-semibold">Hermes 对话</h2>
+          </div>
           <p className="mt-1 text-sm text-text-secondary">安排日程、记录想法、分析附件</p>
         </div>
         <div className="inline-flex items-center rounded-md border border-border bg-bg-elevated px-3 py-1.5 text-xs text-text-secondary">
@@ -177,17 +205,19 @@ export function BrainChatPanel({
         </div>
       </div>
 
-      <div className="mt-5 max-h-80 space-y-3 overflow-y-auto pr-1">
+      <div ref={scrollRef} className="chat-scroll mt-5 max-h-96 space-y-3 overflow-y-auto pr-1">
         {messages.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border bg-bg-elevated/60 p-4 text-sm text-text-secondary">
-            直接和 Hermes 说你要安排、记录或复盘的事情。
+            直接开始，Hermes 会把该记录的写入 Compass。
           </div>
         ) : (
           messages.map((item) => (
             <div
               key={item.id}
-              className={`rounded-lg border p-3 ${
-                item.role === "user" ? "border-accent/40 bg-accent-muted" : "border-border bg-bg-elevated/70"
+              className={`max-w-[min(46rem,100%)] rounded-lg border p-3 transition ${
+                item.role === "user"
+                  ? "ml-auto border-accent/40 bg-accent-muted"
+                  : "border-border bg-bg-elevated/70"
               }`}
             >
               <div className="flex items-center justify-between gap-3 text-xs text-text-secondary">
@@ -219,25 +249,37 @@ export function BrainChatPanel({
         ) : null}
       </div>
 
-      <form onSubmit={submit} className="mt-5 space-y-3">
+      <form ref={formRef} onSubmit={submit} className="mt-5 space-y-3">
         <div
-          className={`rounded-lg border bg-bg-elevated p-3 transition ${
+          className={`relative rounded-lg border bg-bg-elevated p-3 transition ${
             isDragging ? "border-accent shadow-[0_0_0_3px_var(--accent-muted)]" : "border-border"
           }`}
         >
+          {isDragging ? (
+            <div className="pointer-events-none absolute inset-2 z-10 grid place-items-center rounded-md border border-dashed border-accent bg-bg-elevated/90 text-sm text-text-secondary">
+              <span className="inline-flex items-center gap-2">
+                <UploadCloud className="h-4 w-4 text-accent" />
+                松开即可添加
+              </span>
+            </div>
+          ) : null}
           <textarea
             ref={textareaRef}
             value={message}
             onChange={(event) => setMessage(event.target.value)}
+            onKeyDown={handleKeyDown}
             disabled={disabled || isSending}
-            rows={3}
-            placeholder={disabled ? "Hermes 未连接" : "问问 Hermes，或拖拽文件/图片到这里……"}
-            className="min-h-20 w-full resize-y bg-transparent text-sm outline-none placeholder:text-text-tertiary disabled:cursor-not-allowed"
+            rows={2}
+            placeholder={disabled ? "Hermes 未连接" : "说说要安排、记录或分析的事..."}
+            className="min-h-16 max-h-44 w-full resize-none bg-transparent text-sm outline-none placeholder:text-text-tertiary disabled:cursor-not-allowed"
           />
           {files.length > 0 ? (
             <div className="mt-3 flex flex-wrap gap-2">
               {files.map((file, index) => (
-                <span key={`${file.name}-${file.size}-${file.lastModified}`} className="inline-flex max-w-full items-center gap-2 rounded-md border border-border bg-bg-surface px-2 py-1 text-xs text-text-secondary">
+                <span
+                  key={`${file.name}-${file.size}-${file.lastModified}`}
+                  className="inline-flex max-w-full items-center gap-2 rounded-md border border-border bg-bg-surface px-2 py-1 text-xs text-text-secondary"
+                >
                   {file.type.startsWith("image/") ? <ImagePlus className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
                   <span className="truncate">{file.name}</span>
                   <span>{formatBytes(file.size)}</span>
@@ -253,32 +295,29 @@ export function BrainChatPanel({
         {error ? <p className="text-sm text-danger">{error}</p> : null}
 
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              className="sr-only"
-              onChange={(event) => {
-                addFiles(event.currentTarget.files);
-                event.currentTarget.value = "";
-              }}
-            />
-            <button
-              type="button"
-              title="上传附件"
-              disabled={disabled || isSending}
-              onClick={() => fileInputRef.current?.click()}
-              className="glass-btn disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Paperclip className="h-4 w-4" />
-              附件
-            </button>
-            <span className="text-xs text-text-tertiary">支持拖拽，最多 8 个</span>
-          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            className="sr-only"
+            onChange={(event) => {
+              addFiles(event.currentTarget.files);
+              event.currentTarget.value = "";
+            }}
+          />
+          <button
+            type="button"
+            title="上传附件"
+            disabled={disabled || isSending}
+            onClick={() => fileInputRef.current?.click()}
+            className="glass-btn disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Paperclip className="h-4 w-4" />
+            附件
+          </button>
           <button
             type="submit"
-            disabled={disabled || isSending || (!message.trim() && files.length === 0)}
+            disabled={!canSubmit}
             className="glass-btn glass-btn-primary disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
