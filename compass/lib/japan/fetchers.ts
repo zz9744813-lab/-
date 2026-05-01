@@ -1,5 +1,12 @@
-import type { JapanSource } from "./sources";
 import { computeContentHash, classifyIntelItem } from "./classifier";
+
+type FetchableSource = {
+  id: string;
+  name: string;
+  url: string;
+  category: string;
+  authorityLevel: string;
+};
 
 export type FetchedItem = {
   sourceId: string;
@@ -98,7 +105,7 @@ function parseRssItems(xml: string): { title: string; url: string; publishedAt: 
   return items;
 }
 
-export async function fetchFromSource(source: JapanSource): Promise<FetchedItem[]> {
+export async function fetchFromSource(source: FetchableSource): Promise<FetchedItem[]> {
   const items: FetchedItem[] = [];
 
   try {
