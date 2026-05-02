@@ -127,6 +127,154 @@ export const insights = sqliteTable("insights", {
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
 });
 
+export const brainRuns = sqliteTable("brain_runs", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  source: text("source").notNull(),
+  userInput: text("user_input").notNull(),
+  attachmentsJson: text("attachments_json"),
+  contextSnapshotJson: text("context_snapshot_json"),
+  modelProvider: text("model_provider"),
+  modelRawResponse: text("model_raw_response"),
+  status: text("status").notNull(),
+  errorMessage: text("error_message"),
+  durationMs: integer("duration_ms"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  finishedAt: integer("finished_at", { mode: "timestamp" }),
+});
+
+export const brainActions = sqliteTable("brain_actions", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  runId: text("run_id").notNull().references(() => brainRuns.id, { onDelete: "cascade" }),
+  type: text("type").notNull(),
+  payloadJson: text("payload_json").notNull(),
+  status: text("status").notNull(),
+  resultRefTable: text("result_ref_table"),
+  resultRefId: text("result_ref_id"),
+  errorMessage: text("error_message"),
+  missingFieldsJson: text("missing_fields_json"),
+  retryCount: integer("retry_count").notNull().default(0),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+});
+
+export const brainAttachments = sqliteTable("brain_attachments", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  runId: text("run_id").notNull().references(() => brainRuns.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  mimeType: text("mime_type").notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  sha256: text("sha256").notNull(),
+  extractedText: text("extracted_text"),
+  rawBase64: text("raw_base64"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+});
+
+export const plans = sqliteTable("plans", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  goalId: text("goal_id").references(() => goals.id, { onDelete: "set null" }),
+  title: text("title").notNull(),
+  description: text("description"),
+  startDate: text("start_date").notNull(),
+  endDate: text("end_date").notNull(),
+  targetVolume: text("target_volume"),
+  dailyAvgMinutes: integer("daily_avg_minutes"),
+  totalEstimatedMinutes: integer("total_estimated_minutes"),
+  feasibilityCheckJson: text("feasibility_check_json"),
+  sourceAttachmentId: text("source_attachment_id").references(() => brainAttachments.id, { onDelete: "set null" }),
+  sourceRunId: text("source_run_id").references(() => brainRuns.id, { onDelete: "set null" }),
+  status: text("status").notNull().default("draft"),
+  pauseReason: text("pause_reason"),
+  pauseUntil: text("pause_until"),
+  intensityLevel: text("intensity_level").notNull().default("normal"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+});
+
+export const planPhases = sqliteTable("plan_phases", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  planId: text("plan_id").notNull().references(() => plans.id, { onDelete: "cascade" }),
+  orderIndex: integer("order_index").notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  startDate: text("start_date").notNull(),
+  endDate: text("end_date").notNull(),
+  isMilestone: integer("is_milestone", { mode: "boolean" }).notNull().default(false),
+  milestoneTitle: text("milestone_title"),
+  status: text("status").notNull().default("draft"),
+  approvedAt: integer("approved_at", { mode: "timestamp" }),
+  completedAt: integer("completed_at", { mode: "timestamp" }),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+});
+
+export const planTasks = sqliteTable("plan_tasks", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  planId: text("plan_id").notNull().references(() => plans.id, { onDelete: "cascade" }),
+  phaseId: text("phase_id").notNull().references(() => planPhases.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  description: text("description"),
+  estimatedMinutes: integer("estimated_minutes").notNull().default(60),
+  difficulty: text("difficulty").notNull().default("medium"),
+  repeatPattern: text("repeat_pattern").notNull().default("once"),
+  repeatDays: integer("repeat_days"),
+  repeatCount: integer("repeat_count"),
+  startOffsetDays: integer("start_offset_days").notNull().default(0),
+  preferredTimeStart: text("preferred_time_start"),
+  preferredTimeEnd: text("preferred_time_end"),
+  dependsOnTaskId: text("depends_on_task_id"),
+  materializedCount: integer("materialized_count").notNull().default(0),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+});
+
+export const planReviewDrafts = sqliteTable("plan_review_drafts", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  planId: text("plan_id").notNull().references(() => plans.id, { onDelete: "cascade" }),
+  phaseDraftJson: text("phase_draft_json").notNull(),
+  status: text("status").notNull().default("pending"),
+  editedJson: text("edited_json"),
+  generatedByRunId: text("generated_by_run_id").references(() => brainRuns.id, { onDelete: "set null" }),
+  approvedAt: integer("approved_at", { mode: "timestamp" }),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+});
+
+export const coachEvents = sqliteTable("coach_events", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  type: text("type").notNull(),
+  severity: text("severity").notNull().default("info"),
+  planId: text("plan_id").references(() => plans.id, { onDelete: "set null" }),
+  payloadJson: text("payload_json"),
+  triggeredBy: text("triggered_by").notNull(),
+  emailSentAt: integer("email_sent_at", { mode: "timestamp" }),
+  emailMessageId: text("email_message_id"),
+  acknowledgedByUser: integer("acknowledged_by_user", { mode: "boolean" }).notNull().default(false),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+});
+
+export const reflections = sqliteTable("reflections", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  period: text("period").notNull(),
+  startDate: text("start_date").notNull(),
+  endDate: text("end_date").notNull(),
+  metricsJson: text("metrics_json").notNull(),
+  aiSummary: text("ai_summary").notNull(),
+  followupQuestionsJson: text("followup_questions_json"),
+  userResponseJson: text("user_response_json"),
+  emailSentAt: integer("email_sent_at", { mode: "timestamp" }),
+  initiatedAt: integer("initiated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  completedAt: integer("completed_at", { mode: "timestamp" }),
+});
+
+export const wellbeingChecks = sqliteTable("wellbeing_checks", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  date: text("date").notNull(),
+  mood: integer("mood"),
+  energy: integer("energy"),
+  motivation: integer("motivation"),
+  note: text("note"),
+  source: text("source").notNull().default("weekly_review"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+});
+
 export const scheduleItems = sqliteTable("schedule_items", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   title: text("title").notNull(),
@@ -154,6 +302,15 @@ export const scheduleItems = sqliteTable("schedule_items", {
   rescheduleReason: text("reschedule_reason"),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  planId: text("plan_id").references(() => plans.id),
+  planTaskId: text("plan_task_id").references(() => planTasks.id),
+  planPhaseId: text("plan_phase_id").references(() => planPhases.id),
+  expectedMinutes: integer("expected_minutes"),
+  actualMinutes: integer("actual_minutes"),
+  difficultySelfRated: text("difficulty_self_rated"),
+  qualityScoreInferred: real("quality_score_inferred"),
+  qualitySignalsJson: text("quality_signals_json"),
+  autoExtendedCount: integer("auto_extended_count").notNull().default(0),
 });
 
 export const scheduleEvents = sqliteTable("schedule_events", {
