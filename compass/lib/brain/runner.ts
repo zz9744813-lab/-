@@ -4,6 +4,8 @@ import { parseBrainStream, type ParserEvent } from "./stream-parser";
 import { validateAction } from "./action-schemas";
 import { compassTools } from "@/lib/mcp/tools";
 import { eq } from "drizzle-orm";
+import { buildSystemPrompt } from "./prompt-builder";
+import { extractAttachment } from "./attachments";
 
 export type TurnEvent = ParserEvent;
 
@@ -21,26 +23,46 @@ export async function* runBrainTurn(input: {
     status: 'in_progress',
   });
 
-  const processedAttachments = [];
+  const processedAttachments: Array<{ id: string; name: string; text: string | null; warnings: string[] }> = [];
+
   for (const file of input.attachments) {
-    const text = await file.text();
+    const extracted = await extractAttachment(file);
     const attId = crypto.randomUUID();
     await db.insert(brainAttachments).values({
       id: attId,
       runId,
-      name: file.name,
-      mimeType: file.type,
-      sizeBytes: file.size,
-      sha256: 'pending',
-      extractedText: text.substring(0, 8000),
+      name: extracted.name,
+      mimeType: extracted.mimeType,
+      sizeBytes: extracted.sizeBytes,
+      sha256: extracted.sha256,
+      extractedText: extracted.extractedText,
     });
-    processedAttachments.push({ id: attId, name: file.name, text: text.substring(0, 8000) });
+    processedAttachments.push({
+      id: attId,
+      name: extracted.name,
+      text: extracted.extractedText,
+      warnings: extracted.warnings,
+    });
   }
 
   const context = { attachments: processedAttachments };
 
+  const attachmentSection = processedAttachments
+    .filter((a) => a.text)
+    .map(
+      (a, idx) =>
+        `\n====== 附件 ${idx + 1}: ${a.name} ======\n${a.text}\n====== /附件 ${idx + 1} ======`
+    )
+    .join("\n");
+
+  const composedMessage = attachmentSection
+    ? `${input.userMessage}\n\n以下是用户附带的文件内容,你需要从中抽取任务、目标、计划等结构化信息:${attachmentSection}`
+    : input.userMessage;
+
   const bridgeUrl = process.env.HERMES_BRIDGE_URL || "http://127.0.0.1:8000";
   const bridgeToken = process.env.HERMES_BRIDGE_TOKEN || "";
+
+  const systemPrompt = await buildSystemPrompt();
 
   const response = await fetch(`${bridgeUrl}/chat/stream`, {
     method: "POST",
@@ -48,7 +70,7 @@ export async function* runBrainTurn(input: {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${bridgeToken}`
     },
-    body: JSON.stringify({ message: input.userMessage, context })
+    body: JSON.stringify({ message: composedMessage, context, system: systemPrompt })
   });
 
   if (!response.ok || !response.body) {

@@ -1,26 +1,44 @@
 import { runAutoDelayEngine } from "./auto-delay";
-import { runReflectionGenerator } from "./reflection-generator";
+import { runWeeklyReflection } from "./reflection-generator";
 import { db } from "@/lib/db/client";
 import { coachEvents } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 async function processPendingCoachEvents() {
-  const pendingEvents = await db.select().from(coachEvents).where(eq(coachEvents.status, 'pending'));
-  
+  const pendingEvents = await db
+    .select()
+    .from(coachEvents)
+    .where(
+      and(
+        eq(coachEvents.acknowledgedByUser, false),
+        isNull(coachEvents.emailSentAt),
+      ),
+    );
+
   if (pendingEvents.length === 0) return;
 
-  const userEmail = process.env.COMPASS_USER_EMAIL;
+  const userEmail = process.env.COMPASS_REMINDER_EMAIL;
   if (!userEmail) {
-    console.log("No COMPASS_USER_EMAIL configured, skipping coach event email notification.");
+    console.log("No COMPASS_REMINDER_EMAIL configured, skipping coach event email.");
     return;
   }
 
-  const body = pendingEvents.map(e => `[${e.severity.toUpperCase()}] ${e.message}`).join("\n\n");
-  
+  const toEmail = pendingEvents.filter(
+    (e) => e.severity === "warning" || e.severity === "critical",
+  );
+  if (toEmail.length === 0) return;
+
+  const body = toEmail
+    .map((e) => `[${e.severity.toUpperCase()}] ${e.type}\n${e.payloadJson ?? ""}`)
+    .join("\n\n");
+
   console.log(`Mock: Sending email to ${userEmail}:\n${body}`);
 
-  for (const e of pendingEvents) {
-    await db.update(coachEvents).set({ status: 'sent', sentAt: new Date() }).where(eq(coachEvents.id, e.id));
+  for (const e of toEmail) {
+    await db
+      .update(coachEvents)
+      .set({ emailSentAt: new Date() })
+      .where(eq(coachEvents.id, e.id));
   }
 }
 
@@ -35,15 +53,17 @@ async function runAllCrons() {
   }
 
   try {
-    const hour = new Date().getHours();
-    if (hour === 23) {
-      const reviewCount = await runReflectionGenerator();
-      console.log(`Reflection generator executed. Generated ${reviewCount} review.`);
+    const now = new Date();
+    const dow = now.getDay();
+    const hour = now.getHours();
+    if (dow === 0 && hour === 20) {
+      const reviewCount = await runWeeklyReflection();
+      console.log(`Weekly reflection executed. Generated ${reviewCount} review.`);
     } else {
-      console.log(`Current hour is ${hour}, skipping reflection generator (runs at 23:00).`);
+      console.log(`[cron] Skipping weekly reflection (current dow=${dow}, hour=${hour}; runs Sun 20:00 only).`);
     }
   } catch(e) {
-    console.error("Reflection generator error:", e);
+    console.error("Weekly reflection error:", e);
   }
 
   try {

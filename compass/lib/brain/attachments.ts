@@ -40,9 +40,12 @@ export async function extractAttachment(file: File): Promise<{
   } else if (name.toLowerCase().endsWith(".docx")) {
     kind = 'docx';
     extractedText = await extractDocxText(buffer);
-  } else if (name.toLowerCase().endsWith(".xlsx") || name.toLowerCase().endsWith(".csv")) {
+  } else if (name.toLowerCase().endsWith(".csv")) {
     kind = 'spreadsheet';
-    extractedText = await extractTextHeuristic(buffer); // For now just heuristic
+    extractedText = buffer.toString("utf8");
+  } else if (name.toLowerCase().endsWith(".xlsx") || name.toLowerCase().endsWith(".xls")) {
+    kind = 'spreadsheet';
+    extractedText = await extractXlsxText(buffer);
   } else if (mimeType.startsWith("text/") || name.toLowerCase().endsWith(".md")) {
     kind = 'text';
     extractedText = buffer.toString("utf8");
@@ -62,6 +65,22 @@ async function extractDocxText(buffer: Buffer): Promise<string | null> {
     const mammoth = await import("mammoth");
     const result = await mammoth.extractRawText({ buffer });
     return result.value;
+  } catch (err: any) {
+    return `Error reading document: ${err.message}`;
+  }
+}
+
+async function extractXlsxText(buffer: Buffer): Promise<string | null> {
+  try {
+    const XLSX = await import("xlsx");
+    const wb = XLSX.read(buffer, { type: "buffer" });
+    const parts: string[] = [];
+    for (const sheetName of wb.SheetNames) {
+      const sheet = wb.Sheets[sheetName];
+      const csv = XLSX.utils.sheet_to_csv(sheet, { FS: "\t" });
+      parts.push(`## Sheet: ${sheetName}\n${csv}`);
+    }
+    return parts.join("\n\n");
   } catch {
     return null;
   }

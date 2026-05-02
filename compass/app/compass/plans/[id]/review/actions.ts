@@ -4,9 +4,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 export async function approveAction(planId: string) {
-  await approvePlanDraft(planId);
+  const result = await approvePlanDraft(planId);
+  console.log(`[approveAction] Plan ${planId} approved: ${result.scheduleItemsCreated} schedule_items created across ${result.phasesProcessed} phases`);
   revalidatePath(`/compass/plans/${planId}`);
-  redirect(`/compass/plans/${planId}`);
+  redirect(`/schedule`);
 }
 
 export async function rejectAction(planId: string, reason: string) {

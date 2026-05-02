@@ -17,6 +17,7 @@ app = FastAPI(title="hermes-bridge")
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1)
     context: dict[str, Any] = Field(default_factory=dict)
+    system: str | None = None
 
 
 class ChatResponse(BaseModel):
@@ -273,7 +274,7 @@ async def chat(req: ChatRequest, authorization: str | None = Header(default=None
         detail = str(exc) if str(exc) else "调用 Hermes 失败，请检查 bridge 日志。"
         raise HTTPException(status_code=500, detail=f"Hermes Bridge 错误：{detail}") from exc
 
-def stream_direct_fallback(message: str, context: dict[str, Any]):
+def stream_direct_fallback(message: str, context: dict[str, Any], system: str | None = None):
     api_key = os.getenv("HERMES_BRIDGE_FALLBACK_API_KEY") or os.getenv("DEEPSEEK_API_KEY")
     if not api_key:
         yield "Error: 缺少 API KEY"
@@ -290,7 +291,7 @@ def stream_direct_fallback(message: str, context: dict[str, Any]):
         "messages": [
             {
                 "role": "system",
-                "content": "你是 Compass 的个人成长大脑。请基于 Compass 上下文、用户输入和附件给出具体、可执行的中文回复。",
+                "content": system or "你是 Compass 的个人成长大脑。请基于 Compass 上下文、用户输入和附件给出具体、可执行的中文回复。",
             },
             {"role": "user", "content": user_content},
         ],
@@ -331,7 +332,7 @@ async def chat_stream(req: ChatRequest, authorization: str | None = Header(defau
     
     # We will use direct fallback for streaming as AIAgent may not support streaming in run_agent_sync
     def event_generator():
-        for chunk in stream_direct_fallback(req.message, req.context):
+        for chunk in stream_direct_fallback(req.message, req.context, req.system):
             yield chunk
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")

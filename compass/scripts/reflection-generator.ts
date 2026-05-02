@@ -1,80 +1,110 @@
 import { db } from "@/lib/db/client";
 import { scheduleItems, reflections, coachEvents } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq, gte, lte } from "drizzle-orm";
 import crypto from "node:crypto";
 import { sendBrainMessage } from "@/lib/brain/client";
 import { loadBrainConfigFromStore } from "@/lib/brain/settings-store";
 
-export async function runReflectionGenerator() {
-  const now = new Date();
-  const nowDate = now.toISOString().split('T')[0];
+function isoDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
 
-  const items = await db.select().from(scheduleItems).where(
-    eq(scheduleItems.date, nowDate)
-  );
+export async function runWeeklyReflection(): Promise<number> {
+  const now = new Date();
+  const endDate = isoDate(now);
+  const startDateObj = new Date(now);
+  startDateObj.setUTCDate(startDateObj.getUTCDate() - 6);
+  const startDate = isoDate(startDateObj);
+
+  const items = await db
+    .select()
+    .from(scheduleItems)
+    .where(and(gte(scheduleItems.date, startDate), lte(scheduleItems.date, endDate)));
 
   const total = items.length;
-  const done = items.filter(i => i.status === 'done' || i.status === 'completed').length;
-  const delayed = items.filter(i => i.status === 'delayed' || i.status === 'skipped');
-  
-  if (total === 0) return 0;
+  if (total === 0) {
+    console.log(`[weekly-reflection] No schedule items between ${startDate} and ${endDate}, skipping.`);
+    return 0;
+  }
 
-  const summary = `
-今天计划数: ${total}
-完成数: ${done}
-延期/跳过任务: ${delayed.length > 0 ? delayed.map(i => i.title).join(", ") : '无'}
-`;
+  const done = items.filter((i) => i.status === "done" || i.status === "completed").length;
+  const missed = items.filter((i) => i.status === "missed" || i.status === "skipped" || i.status === "delayed").length;
+  const completionRate = Math.round((done / total) * 100);
+
+  const skippedTitles = items
+    .filter((i) => i.status === "missed" || i.status === "skipped")
+    .map((i) => `${i.date} ${i.title}`)
+    .slice(0, 10);
+
+  const summary = [
+    `周期: ${startDate} ~ ${endDate}`,
+    `任务总数: ${total}, 完成: ${done}, 跳过/未完成: ${missed}`,
+    `完成率: ${completionRate}%`,
+    skippedTitles.length > 0 ? `跳过任务列表: ${skippedTitles.join("; ")}` : "无跳过任务",
+  ].join("\n");
 
   const config = await loadBrainConfigFromStore();
-  const prompt = `
-你是一个严肃的私教。请根据以下数据生成今天的客观复盘总结，不要发送晚安或过度鼓励。
-数据：
+  const prompt = `你是用户的严格私教,语气数据驱动、直接、不卖萌、不发感叹号轰炸。基于本周数据生成 150-250 字的周复盘,并提出 1-2 个 follow-up 问题。
+
+本周数据:
 ${summary}
 
-输出格式：
-[[ACTION:save_review]]
-{"period":"day","title":"${nowDate} 日复盘","body":"这里写复盘内容"}
-[[/ACTION]]
-`;
+输出严格按以下格式,不要在 ACTION 块外说话:
 
-  const result = await sendBrainMessage(prompt, { page: 'reflection-generator' }, config);
-  
-  if (result.ok) {
-    const actionMatch = result.response.match(/\[\[ACTION:save_review\]\]\s*([\s\S]*?)\s*\[\[\/ACTION\]\]/i);
-    if (actionMatch) {
-      try {
-        const payload = JSON.parse(actionMatch[1].trim());
-        const id = crypto.randomUUID();
-        await db.insert(reflections).values({
-          id,
-          period: 'day',
-          startDate: nowDate,
-          endDate: nowDate,
-          aiSummary: payload.body,
-          metricsJson: JSON.stringify({ total, done, delayedCount: delayed.length })
-        });
-        
-        await db.insert(coachEvents).values({
-          id: crypto.randomUUID(),
-          type: 'reflection_generated',
-          severity: 'info',
-          message: `自动生成了 ${nowDate} 的日复盘。`
-        });
-        return 1;
-      } catch (e) {
-        console.error("Failed to parse or insert review", e);
-      }
-    }
+[[ACTION:save_review]]
+{"period":"week","title":"${startDate} ~ ${endDate} 周复盘","body":"<150-250 字的复盘正文,以及 1-2 个换行后的问题>"}
+[[/ACTION]]`;
+
+  const result = await sendBrainMessage(prompt, { page: "weekly-reflection" }, config);
+  if (!result.ok) {
+    console.error("[weekly-reflection] Brain call failed:", result);
+    return 0;
   }
-  return 0;
+
+  const match = result.response.match(/\[\[ACTION:save_review\]\]\s*([\s\S]*?)\s*\[\[\/ACTION\]\]/i);
+  if (!match) {
+    console.error("[weekly-reflection] Brain response missing action block. Raw:\n", result.response);
+    return 0;
+  }
+
+  let payload: { period: string; title: string; body: string };
+  try {
+    payload = JSON.parse(match[1].trim());
+  } catch (e) {
+    console.error("[weekly-reflection] Failed to parse action block:", e);
+    return 0;
+  }
+
+  const reflectionId = crypto.randomUUID();
+  await db.insert(reflections).values({
+    id: reflectionId,
+    period: "week",
+    startDate,
+    endDate,
+    aiSummary: payload.body,
+    metricsJson: JSON.stringify({ total, done, missed, completionRate, skippedTitles }),
+  });
+
+  await db.insert(coachEvents).values({
+    id: crypto.randomUUID(),
+    type: "weekly_review_initiated",
+    severity: "info",
+    triggeredBy: "cron",
+    payloadJson: JSON.stringify({ reflectionId, period: "week", startDate, endDate }),
+  });
+
+  console.log(`[weekly-reflection] Generated reflection ${reflectionId} for ${startDate} ~ ${endDate}`);
+  return 1;
 }
 
 if (require.main === module) {
-  runReflectionGenerator().then((c) => {
-    console.log(`Reflection generator completed. Generated ${c} review.`);
-    process.exit(0);
-  }).catch(err => {
-    console.error(err);
-    process.exit(1);
-  });
+  runWeeklyReflection()
+    .then((c) => {
+      console.log(`Weekly reflection completed. Generated ${c} review.`);
+      process.exit(0);
+    })
+    .catch((err) => {
+      console.error(err);
+      process.exit(1);
+    });
 }

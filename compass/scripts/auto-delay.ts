@@ -38,10 +38,14 @@ export async function runAutoDelayEngine() {
 
       await db.insert(coachEvents).values({
         id: crypto.randomUUID(),
-        type: 'delay_warning',
-        severity: 'low',
-        message: `自动延期检测：任务 "${item.title}" 已超时，已自动标记为延期。`,
-        contextJson: JSON.stringify({ itemId: item.id, title: item.title })
+        type: 'schedule_item_auto_delayed',
+        severity: 'info',
+        triggeredBy: 'cron',
+        payloadJson: JSON.stringify({
+          itemId: item.id,
+          title: item.title,
+          originalDate: item.date,
+        }),
       });
       
       delayedCount++;
