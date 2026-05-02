@@ -207,11 +207,22 @@ export function BrainChatPanel({
   const [isSending, setIsSending] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [diagResult, setDiagResult] = useState<DiagnosticsResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const canSubmit = !disabled && !isSending && (message.trim().length > 0 || files.length > 0);
+
+  async function loadDiagnostics() {
+    try {
+      const res = await fetch("/api/brain/diagnostics");
+      const data = await res.json();
+      setDiagResult(data);
+    } catch {
+      setDiagResult(null);
+    }
+  }
 
   async function loadMessages() {
     try {
@@ -329,14 +340,27 @@ export function BrainChatPanel({
       });
       void loadMessages();
     } catch (err) {
-      const textError = err instanceof Error ? err.message : "发送失败";
-      setError(textError);
+      const rawError = err instanceof Error ? err.message : "发送失败";
+      setError(rawError);
+
+      // Classify error for user-friendly display
+      let shortMessage = rawError;
+      if (rawError.includes("403") || rawError.includes("1010") || rawError.includes("被上游拒绝") || rawError.includes("fallback 模型服务拒绝")) {
+        shortMessage = "fallback 模型服务拒绝请求；当前 Compass 没有成功调用 Hermes 主模型。请查看诊断。";
+      } else if (rawError.includes("超时")) {
+        shortMessage = "Hermes Bridge 请求超时，模型可能正在处理或服务繁忙。";
+      } else if (rawError.includes("无法连接")) {
+        shortMessage = "无法连接 Hermes Bridge，请确认服务已启动。";
+      } else if (rawError.includes("主链路失败")) {
+        shortMessage = rawError;
+      }
+
       setMessages((current) => [
         ...current,
         {
           id: `local-error-${Date.now()}`,
           role: "assistant",
-          content: `发送失败：${textError}`,
+          content: shortMessage,
           createdAt: nowLabel(),
           bridgeOk: false,
         },
@@ -489,7 +513,38 @@ export function BrainChatPanel({
           ) : null}
         </div>
 
-        {error ? <p className="text-sm text-danger">{error}</p> : null}
+        {error && (
+          <div className="flex items-center justify-between gap-2 rounded-md border border-red-400/20 bg-red-500/5 px-3 py-2">
+            <p className="text-xs text-red-300 truncate">{error.length > 80 ? error.slice(0, 80) + "…" : error}</p>
+            <div className="flex gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setError(null);
+                  void loadDiagnostics();
+                }}
+                className="text-xs text-red-200 hover:text-red-100 underline"
+              >
+                诊断
+              </button>
+              <button
+                type="button"
+                onClick={() => setError(null)}
+                className="text-xs text-red-200 hover:text-red-100"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        )}
+        {diagResult && !error && (
+          <div className="rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs text-text-secondary space-y-1">
+            <p>Bridge：{diagResult.bridgeReachable ? "可达" : "不可达"} {diagResult.bridgeLatencyMs ? `· ${diagResult.bridgeLatencyMs}ms` : ""}</p>
+            <p>模型就绪：{diagResult.chatReady ? "是" : "否"}</p>
+            {diagResult.bridgeDiagnostics && <p>Fallback：{diagResult.bridgeDiagnostics.fallbackEnabled ? "已启用" : "关闭"}</p>}
+            {diagResult.reason && <p className="text-amber-300">{diagResult.reason}</p>}
+          </div>
+        )}
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <input

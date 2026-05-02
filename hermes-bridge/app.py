@@ -60,11 +60,6 @@ def build_agent() -> Any:
         "skip_context_files": parse_bool_env("HERMES_BRIDGE_SKIP_CONTEXT_FILES", False),
     }
 
-    # Keep the bridge aligned with Hermes gateway by default: if no explicit
-    # HERMES_AGENT_* override is configured, AIAgent reads ~/.hermes/config.yaml.
-    # Legacy MODEL_PROVIDER/DEEPSEEK_* variables are still honored when present,
-    # but the bridge no longer injects DeepSeek defaults that can shadow the
-    # user's primary Hermes model.
     provider = first_env("HERMES_AGENT_PROVIDER", "MODEL_PROVIDER")
     base_url = first_env("HERMES_AGENT_BASE_URL", "DEEPSEEK_BASE_URL")
     api_key = first_env("HERMES_AGENT_API_KEY", "DEEPSEEK_API_KEY")
@@ -172,6 +167,12 @@ def call_direct_fallback(message: str, context: dict[str, Any]) -> str:
         return post_chat_completion(base_url, api_key, payload)
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", "replace")[:500]
+        if exc.code == 403 or "1010" in body:
+            raise RuntimeError(
+                f"direct fallback 被上游拒绝（HTTP {exc.code}），可能是 provider API key、base_url、模型名、"
+                f"地区/WAF 限制或 Cloudflare 拒绝。请检查 HERMES_BRIDGE_FALLBACK_BASE_URL/HERMES_BRIDGE_FALLBACK_MODEL/"
+                f"HERMES_BRIDGE_FALLBACK_API_KEY，或关闭 fallback。原始响应：{body}"
+            ) from exc
         if not image_parts:
             raise RuntimeError(f"fallback 返回 HTTP {exc.code}: {body}") from exc
         payload["messages"][-1]["content"] = prompt
@@ -183,7 +184,11 @@ def call_direct_fallback(message: str, context: dict[str, Any]) -> str:
 
 
 def run_agent_sync(message: str, context: dict[str, Any]) -> tuple[str, str]:
-    if parse_bool_env("HERMES_BRIDGE_DIRECT_FOR_ATTACHMENTS", False) and context_has_attachments(context):
+    fallback_enabled = parse_bool_env("HERMES_BRIDGE_ALLOW_DIRECT_FALLBACK", False)
+    direct_for_attachments = parse_bool_env("HERMES_BRIDGE_DIRECT_FOR_ATTACHMENTS", False)
+
+    # Only use direct fallback for attachments if explicitly enabled
+    if direct_for_attachments and context_has_attachments(context):
         return call_direct_fallback(message, context), "direct-attachments"
 
     prompt = build_prompt(message, context)
@@ -199,11 +204,15 @@ def run_agent_sync(message: str, context: dict[str, Any]) -> tuple[str, str]:
                     return text, "hermes-python"
                 break
     except Exception as exc:  # noqa: BLE001
-        if not parse_bool_env("HERMES_BRIDGE_ALLOW_DIRECT_FALLBACK", True):
-            raise
+        if not fallback_enabled:
+            raise RuntimeError(
+                f"Hermes Python 主链路失败，fallback 未启用。请检查 Hermes AIAgent 配置、"
+                f"~/.hermes/config.yaml、API key、provider/model，以及 hermes-bridge 日志。"
+                f"原始错误：{exc}"
+            ) from exc
         print(f"Hermes Python 调用失败，使用 fallback: {exc}", flush=True)
 
-    if parse_bool_env("HERMES_BRIDGE_ALLOW_DIRECT_FALLBACK", True):
+    if fallback_enabled:
         return call_direct_fallback(message, context), "direct-fallback"
 
     raise RuntimeError("Hermes 没有返回可用回复")
@@ -212,6 +221,36 @@ def run_agent_sync(message: str, context: dict[str, Any]) -> tuple[str, str]:
 @app.get("/health")
 def health() -> dict[str, Any]:
     return {"ok": True, "service": "hermes-bridge"}
+
+
+@app.get("/diagnostics")
+def diagnostics() -> dict[str, Any]:
+    fallback_enabled = parse_bool_env("HERMES_BRIDGE_ALLOW_DIRECT_FALLBACK", False)
+    direct_for_attachments = parse_bool_env("HERMES_BRIDGE_DIRECT_FOR_ATTACHMENTS", False)
+    has_fallback_key = bool(os.getenv("HERMES_BRIDGE_FALLBACK_API_KEY") or os.getenv("DEEPSEEK_API_KEY"))
+
+    # Check if AIAgent can be imported (without initializing)
+    can_import_agent = False
+    try:
+        from run_agent import AIAgent  # noqa: F401
+        can_import_agent = True
+    except Exception:
+        pass
+
+    return {
+        "ok": True,
+        "service": "hermes-bridge",
+        "fallbackEnabled": fallback_enabled,
+        "directForAttachments": direct_for_attachments,
+        "hasFallbackApiKey": has_fallback_key,
+        "fallbackBaseUrl": os.getenv("HERMES_BRIDGE_FALLBACK_BASE_URL") or os.getenv("DEEPSEEK_BASE_URL") or "https://api.deepseek.com",
+        "fallbackModel": os.getenv("HERMES_BRIDGE_FALLBACK_MODEL") or os.getenv("DEEPSEEK_MODEL") or "deepseek-v4-flash",
+        "hasHermesAgentOverride": bool(first_env("HERMES_AGENT_PROVIDER", "MODEL_PROVIDER")),
+        "agentProviderOverride": first_env("HERMES_AGENT_PROVIDER", "MODEL_PROVIDER"),
+        "agentBaseUrlOverride": first_env("HERMES_AGENT_BASE_URL", "DEEPSEEK_BASE_URL"),
+        "agentModelOverride": first_env("HERMES_AGENT_MODEL", "DEEPSEEK_MODEL"),
+        "canImportAIAgent": can_import_agent,
+    }
 
 
 @app.post("/chat", response_model=ChatResponse)

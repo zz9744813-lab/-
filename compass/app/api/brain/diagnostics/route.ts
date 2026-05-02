@@ -10,6 +10,22 @@ export async function GET() {
   const status = getBrainStatus(stored);
   const health = await probeBridgeHealth(stored);
 
+  // Try to fetch /diagnostics from bridge
+  let bridgeDiagnostics: Record<string, unknown> | null = null;
+  if (health.reachable && config.hermesBridgeUrl) {
+    try {
+      const diagUrl = `${config.hermesBridgeUrl.replace(/\/$/, "")}/diagnostics`;
+      const headers: Record<string, string> = {};
+      if (config.hermesBridgeToken) headers["Authorization"] = `Bearer ${config.hermesBridgeToken}`;
+      const res = await fetch(diagUrl, { headers, signal: AbortSignal.timeout(5000) });
+      if (res.ok) {
+        bridgeDiagnostics = await res.json();
+      }
+    } catch {
+      // Ignore diagnostics fetch errors
+    }
+  }
+
   const recommendations: string[] = [];
 
   if (config.provider === "disabled") {
@@ -24,7 +40,7 @@ export async function GET() {
 
       if (url.includes("127.0.0.1") || url.includes("localhost")) {
         recommendations.push("Bridge URL 指向本机。请确认 hermes-bridge 和 Compass 在同一台机器上。");
-        recommendations.push("运行: systemctl status hermes-bridge");
+        recommendations.push("运行: systemctl status hermes-bridge --no-pager");
         recommendations.push("运行: curl http://127.0.0.1:8787/health");
       }
 
@@ -39,6 +55,30 @@ export async function GET() {
       if (health.reason.includes("超时")) {
         recommendations.push("Bridge 响应超时，可能是模型请求阻塞或 bridge 卡住。");
       }
+    } else {
+      // Bridge is reachable, check diagnostics
+      if (bridgeDiagnostics) {
+        if (!bridgeDiagnostics.canImportAIAgent) {
+          recommendations.push("hermes-bridge 无法导入 AIAgent，可能没有运行在 Hermes Python 环境中。");
+        }
+        if (bridgeDiagnostics.fallbackEnabled) {
+          recommendations.push("fallback 已启用。如果模型调用失败，会尝试 fallback provider。");
+        }
+        if (!bridgeDiagnostics.hasHermesAgentOverride) {
+          recommendations.push("未设置 Hermes Agent 覆盖变量，将使用 ~/.hermes/config.yaml 默认配置。");
+        }
+      }
+
+      recommendations.push("诊断命令:");
+      recommendations.push("  systemctl status hermes-bridge --no-pager");
+      recommendations.push("  journalctl -u hermes-bridge -n 120 --no-pager");
+      recommendations.push("  curl http://127.0.0.1:8787/health");
+      recommendations.push("  curl http://127.0.0.1:8787/diagnostics");
+      if (config.hermesBridgeToken) {
+        recommendations.push("  curl -X POST http://127.0.0.1:8787/chat -H 'Content-Type: application/json' -H 'Authorization: Bearer ***' -d '{\"message\":\"ping\",\"context\":{}}'");
+      } else {
+        recommendations.push("  curl -X POST http://127.0.0.1:8787/chat -H 'Content-Type: application/json' -d '{\"message\":\"ping\",\"context\":{}}'");
+      }
     }
   }
 
@@ -48,11 +88,13 @@ export async function GET() {
     hermesBridgeUrl: config.hermesBridgeUrl ?? null,
     hasToken: !!(config.hermesBridgeToken && config.hermesBridgeToken.trim() !== ""),
     configured: status.configured,
-    reachable: health.reachable,
+    bridgeReachable: health.reachable,
+    bridgeLatencyMs: health.reachable ? health.latencyMs : null,
+    bridgeService: health.reachable ? health.service : null,
     reason: health.reachable ? null : ("reason" in health ? health.reason : null),
     debugReason: health.reachable ? null : ("debugReason" in health ? health.debugReason : null),
-    latencyMs: health.reachable ? health.latencyMs : null,
-    service: health.reachable ? health.service : null,
+    bridgeDiagnostics,
+    chatReady: health.reachable && (bridgeDiagnostics?.canImportAIAgent ?? false),
     recommendations,
   });
 }

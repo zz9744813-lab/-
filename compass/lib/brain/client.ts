@@ -95,6 +95,22 @@ export function getBrainStatus(configInput?: Partial<BrainRuntimeConfig>): Brain
   };
 }
 
+function friendlyBridgeError(detail: string): string {
+  if (detail.includes("fallback 返回 HTTP 403") || detail.includes("error code: 1010") || detail.includes("被上游拒绝")) {
+    return "Hermes Bridge 已连接，但 fallback 模型服务拒绝请求。请关闭 fallback 或检查 fallback provider 配置。";
+  }
+  if (detail.includes("fallback 缺少") || detail.includes("FALLBACK_API_KEY")) {
+    return "fallback 未配置 API key。";
+  }
+  if (detail.includes("无法导入 Hermes AIAgent")) {
+    return "hermes-bridge 没有运行在 Hermes Python 环境中。";
+  }
+  if (detail.includes("主链路失败")) {
+    return detail;
+  }
+  return detail;
+}
+
 async function callHermesBridge(
   url: string,
   token: string | undefined,
@@ -122,10 +138,8 @@ async function callHermesBridge(
     };
 
     if (!response.ok) {
-      return {
-        ok: false,
-        error: payload.detail ?? payload.error ?? `Hermes Bridge 返回 ${response.status}`,
-      };
+      const rawDetail = payload.detail ?? payload.error ?? `Hermes Bridge 返回 ${response.status}`;
+      return { ok: false, error: friendlyBridgeError(rawDetail) };
     }
 
     const text = typeof payload.response === "string" ? payload.response : "";
@@ -183,7 +197,7 @@ export async function sendBrainMessage(
       ok: false,
       provider: "hermes-bridge",
       response: "",
-      error: `调用 Hermes Bridge 失败：${result.error}`,
+      error: result.error,
     };
   }
 
