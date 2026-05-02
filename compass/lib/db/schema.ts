@@ -168,6 +168,18 @@ export const scheduleEvents = sqliteTable("schedule_events", {
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
 });
 
+export const goalEvents = sqliteTable("goal_events", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  goalId: text("goal_id").notNull().references(() => goals.id, { onDelete: "cascade" }),
+  type: text("type").notNull(),
+  note: text("note"),
+  reason: text("reason"),
+  fromStatus: text("from_status"),
+  toStatus: text("to_status"),
+  payloadJson: text("payload_json"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+});
+
 export const skillsCache = sqliteTable("skills_cache", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),

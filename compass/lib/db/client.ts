@@ -227,6 +227,19 @@ CREATE TABLE IF NOT EXISTS japan_intel_alerts (
   FOREIGN KEY (item_id) REFERENCES japan_intel_items(id)
 );
 
+CREATE TABLE IF NOT EXISTS goal_events (
+  id TEXT PRIMARY KEY NOT NULL,
+  goal_id TEXT NOT NULL,
+  type TEXT NOT NULL,
+  note TEXT,
+  reason TEXT,
+  from_status TEXT,
+  to_status TEXT,
+  payload_json TEXT,
+  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+  FOREIGN KEY (goal_id) REFERENCES goals(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS japan_intel_email_logs (
   id TEXT PRIMARY KEY NOT NULL,
   kind TEXT NOT NULL,
@@ -319,6 +332,7 @@ const timestampColumns: Record<string, string[]> = {
   insights: ["created_at"],
   schedule_items: ["reminder_sent_at", "completed_at", "created_at", "updated_at"],
   schedule_events: ["created_at"],
+  goal_events: ["created_at"],
   japan_sources: ["last_checked_at", "last_success_at", "created_at", "updated_at"],
   japan_intel_items: ["published_at", "fetched_at", "created_at"],
   japan_intel_digests: ["sent_at", "created_at"],

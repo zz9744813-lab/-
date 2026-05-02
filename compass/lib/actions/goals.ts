@@ -1,53 +1,113 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
-import { goals } from "@/lib/db/schema";
+import { goals, goalEvents } from "@/lib/db/schema";
 
-const STRING_FIELDS = new Set(["title", "description", "dimension", "status"]);
-const STATUS_VALUES = new Set(["active", "completed", "paused"]);
+const EDITABLE_FIELDS = new Set(["title", "description", "dimension", "targetDate"]);
 
-function clamp(n: number) {
-  return Math.max(0, Math.min(100, n));
+// ── Event logging ─────────────────────────────────────────
+
+async function logGoalEvent(
+  goalId: string,
+  type: string,
+  opts?: { fromStatus?: string; toStatus?: string; note?: string; reason?: string; payload?: unknown },
+) {
+  await db.insert(goalEvents).values({
+    goalId,
+    type,
+    fromStatus: opts?.fromStatus ?? null,
+    toStatus: opts?.toStatus ?? null,
+    note: opts?.note ?? null,
+    reason: opts?.reason ?? null,
+    payloadJson: opts?.payload ? JSON.stringify(opts.payload) : null,
+  });
 }
 
-export async function updateGoalField(id: string, field: string, value: string) {
-  if (!id) return;
-  if (field === "status") {
-    if (!STATUS_VALUES.has(value)) return;
-    await db.update(goals).set({ status: value, updatedAt: new Date() }).where(eq(goals.id, id));
-  } else if (field === "targetDate") {
-    await db
-      .update(goals)
-      .set({ targetDate: value ? new Date(value) : null, updatedAt: new Date() })
-      .where(eq(goals.id, id));
-  } else if (STRING_FIELDS.has(field)) {
-    const patch: Record<string, unknown> = { [field]: value || null, updatedAt: new Date() };
-    if (field === "title" && !value.trim()) return;
-    if (field === "title") patch.title = value.trim();
-    if (field === "dimension") patch.dimension = value.trim() || "成长";
-    await db.update(goals).set(patch).where(eq(goals.id, id));
-  } else {
-    return;
-  }
+// ── Status actions ────────────────────────────────────────
+
+export async function pauseGoal(id: string, reason?: string) {
+  const [goal] = await db.select().from(goals).where(eq(goals.id, id)).limit(1);
+  if (!goal || goal.status !== "active") return;
+
+  await db.update(goals).set({ status: "paused", updatedAt: new Date() }).where(eq(goals.id, id));
+  await logGoalEvent(id, "paused", { fromStatus: "active", toStatus: "paused", reason });
   revalidatePath("/goals");
   revalidatePath("/dashboard");
 }
 
-export async function adjustGoalProgress(id: string, delta: number) {
-  if (!id) return;
-  const current = await db.select().from(goals).where(eq(goals.id, id)).limit(1);
-  if (!current[0]) return;
-  const next = clamp((current[0].progress ?? 0) + delta);
+export async function resumeGoal(id: string) {
+  const [goal] = await db.select().from(goals).where(eq(goals.id, id)).limit(1);
+  if (!goal || goal.status !== "paused") return;
+
+  await db.update(goals).set({ status: "active", updatedAt: new Date() }).where(eq(goals.id, id));
+  await logGoalEvent(id, "resumed", { fromStatus: "paused", toStatus: "active" });
+  revalidatePath("/goals");
+  revalidatePath("/dashboard");
+}
+
+export async function completeGoal(id: string, payload: { finalNote: string; finalScore?: number }) {
+  const [goal] = await db.select().from(goals).where(eq(goals.id, id)).limit(1);
+  if (!goal || goal.status === "completed") return;
+
+  const fromStatus = goal.status;
   await db
     .update(goals)
-    .set({
-      progress: next,
-      status: next >= 100 ? "completed" : current[0].status === "completed" ? "active" : current[0].status,
-      updatedAt: new Date(),
-    })
+    .set({ status: "completed", progress: 100, updatedAt: new Date() })
     .where(eq(goals.id, id));
+
+  await logGoalEvent(id, "completed", {
+    fromStatus,
+    toStatus: "completed",
+    note: payload.finalNote,
+    payload: { finalScore: payload.finalScore },
+  });
+  revalidatePath("/goals");
+  revalidatePath("/dashboard");
+}
+
+export async function reopenGoal(id: string, reason?: string) {
+  const [goal] = await db.select().from(goals).where(eq(goals.id, id)).limit(1);
+  if (!goal || goal.status === "active") return;
+
+  const fromStatus = goal.status;
+  await db.update(goals).set({ status: "active", progress: 0, updatedAt: new Date() }).where(eq(goals.id, id));
+  await logGoalEvent(id, "reopened", { fromStatus, toStatus: "active", reason });
+  revalidatePath("/goals");
+  revalidatePath("/dashboard");
+}
+
+export async function archiveGoal(id: string) {
+  const [goal] = await db.select().from(goals).where(eq(goals.id, id)).limit(1);
+  if (!goal) return;
+
+  const fromStatus = goal.status;
+  await db.update(goals).set({ status: "archived", updatedAt: new Date() }).where(eq(goals.id, id));
+  await logGoalEvent(id, "archived", { fromStatus, toStatus: "archived" });
+  revalidatePath("/goals");
+  revalidatePath("/dashboard");
+}
+
+// ── Field updates (title/description/dimension/targetDate only) ──
+
+export async function updateGoalField(id: string, field: string, value: string) {
+  if (!id || !EDITABLE_FIELDS.has(field)) return;
+
+  const patch: Record<string, unknown> = { updatedAt: new Date() };
+
+  if (field === "targetDate") {
+    patch.targetDate = value ? new Date(value) : null;
+  } else if (field === "title") {
+    if (!value.trim()) return;
+    patch.title = value.trim();
+  } else if (field === "dimension") {
+    patch.dimension = value.trim() || "成长";
+  } else {
+    patch[field] = value || null;
+  }
+
+  await db.update(goals).set(patch).where(eq(goals.id, id));
   revalidatePath("/goals");
   revalidatePath("/dashboard");
 }
@@ -65,14 +125,32 @@ export async function createGoalAction(formData: FormData) {
   const description = String(formData.get("description") ?? "").trim();
   const dimension = String(formData.get("dimension") ?? "成长").trim() || "成长";
   const targetDateRaw = String(formData.get("targetDate") ?? "").trim();
-  await db.insert(goals).values({
-    title,
-    description: description || null,
-    dimension,
-    targetDate: targetDateRaw ? new Date(targetDateRaw) : null,
-    status: "active",
-    progress: 0,
-  });
+
+  const [created] = await db
+    .insert(goals)
+    .values({
+      title,
+      description: description || null,
+      dimension,
+      targetDate: targetDateRaw ? new Date(targetDateRaw) : null,
+      status: "active",
+      progress: 0,
+    })
+    .returning();
+
+  if (created) {
+    await logGoalEvent(created.id, "created", { toStatus: "active", note: "手动创建" });
+  }
   revalidatePath("/goals");
   revalidatePath("/dashboard");
+}
+
+// ── Queries ───────────────────────────────────────────────
+
+export async function getGoalEvents(goalId: string) {
+  return db
+    .select()
+    .from(goalEvents)
+    .where(eq(goalEvents.goalId, goalId))
+    .orderBy(desc(goalEvents.createdAt));
 }
