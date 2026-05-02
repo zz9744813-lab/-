@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { GoalCard, type GoalCardItem } from "./goal-card";
 import { CompleteGoalDialog } from "./complete-goal-dialog";
-import { EventHistoryDialog } from "@/components/schedule/event-history-dialog";
 import {
   pauseGoal,
   resumeGoal,
@@ -14,7 +13,6 @@ import {
 
 export function GoalsBoard({ goals }: { goals: GoalCardItem[] }) {
   const [completeTarget, setCompleteTarget] = useState<GoalCardItem | null>(null);
-  const [eventsTarget, setEventsTarget] = useState<GoalCardItem | null>(null);
 
   if (goals.length === 0) {
     return (
@@ -49,7 +47,7 @@ export function GoalsBoard({ goals }: { goals: GoalCardItem[] }) {
                   onComplete={() => setCompleteTarget(goal)}
                   onReopen={() => reopenGoal(goal.id)}
                   onArchive={() => archiveGoal(goal.id)}
-                  onViewEvents={() => setEventsTarget(goal)}
+                  onViewEvents={() => {}}
                   onHermesBreakdown={() => {}}
                 />
               ))}
@@ -73,7 +71,7 @@ export function GoalsBoard({ goals }: { goals: GoalCardItem[] }) {
                   onComplete={() => setCompleteTarget(goal)}
                   onReopen={() => reopenGoal(goal.id)}
                   onArchive={() => archiveGoal(goal.id)}
-                  onViewEvents={() => setEventsTarget(goal)}
+                  onViewEvents={() => {}}
                   onHermesBreakdown={() => {}}
                 />
               ))}
@@ -97,7 +95,7 @@ export function GoalsBoard({ goals }: { goals: GoalCardItem[] }) {
                   onComplete={() => setCompleteTarget(goal)}
                   onReopen={() => reopenGoal(goal.id)}
                   onArchive={() => archiveGoal(goal.id)}
-                  onViewEvents={() => setEventsTarget(goal)}
+                  onViewEvents={() => {}}
                   onHermesBreakdown={() => {}}
                 />
               ))}
@@ -121,7 +119,7 @@ export function GoalsBoard({ goals }: { goals: GoalCardItem[] }) {
                   onComplete={() => setCompleteTarget(goal)}
                   onReopen={() => reopenGoal(goal.id)}
                   onArchive={() => archiveGoal(goal.id)}
-                  onViewEvents={() => setEventsTarget(goal)}
+                  onViewEvents={() => {}}
                   onHermesBreakdown={() => {}}
                 />
               ))}
@@ -138,8 +136,6 @@ export function GoalsBoard({ goals }: { goals: GoalCardItem[] }) {
           setCompleteTarget(null);
         }}
       />
-
-      <EventHistoryDialog item={eventsTarget} onClose={() => setEventsTarget(null)} />
     </>
   );
 }
