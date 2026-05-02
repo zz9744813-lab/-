@@ -1,5 +1,6 @@
 import { compassTools } from "@/lib/mcp/tools";
 import type { McpTool } from "@/lib/mcp/tools/types";
+import { startMcpRun, logMcpAction, finishMcpRun } from "@/lib/mcp/observability";
 
 const MCP_PROTOCOL_VERSION = "2024-11-05";
 const SERVER_INFO = { name: "compass-mcp", version: "0.1.0" };
@@ -23,7 +24,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isAuthorized(request: Request): boolean {
-  const expectedToken = process.env.HERMES_TOKEN;
+  const expectedToken = process.env.COMPASS_MCP_TOKEN || process.env.HERMES_TOKEN;
   if (!expectedToken) return true;
 
   const header = request.headers.get("authorization") ?? "";
@@ -269,14 +270,53 @@ async function handleJsonRpcMessage(message: JsonRpcMessage) {
         return jsonRpcError(id, -32602, "tools/call params.name is required");
       }
 
+      // T-21: Record MCP tool calls for observability (/operations page)
+      let ctx;
+      try {
+        ctx = await startMcpRun({
+          source: "hermes-mcp",
+          sessionId: null,
+        });
+      } catch {
+        // If DB logging fails, still execute the tool
+        ctx = null;
+      }
+
       try {
         const result = await runTool(name, args);
+        const resultObj = result as Record<string, unknown> | null;
+
+        if (ctx) {
+          try {
+            await logMcpAction(ctx, {
+              toolName: name,
+              payload: args,
+              status: "success",
+              resultRefId: resultObj?.id ? String(resultObj.id) : null,
+              resultRefTable: null,
+            });
+            await finishMcpRun(ctx, "completed");
+          } catch { /* ignore logging errors */ }
+        }
+
         return jsonRpcResult(id, {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           structuredContent: result,
           isError: false,
         });
       } catch (error) {
+        if (ctx) {
+          try {
+            await logMcpAction(ctx, {
+              toolName: name,
+              payload: args,
+              status: "failed",
+              errorMessage: error instanceof Error ? error.message : "Unknown MCP error",
+            });
+            await finishMcpRun(ctx, "failed", error instanceof Error ? error.message : "Unknown MCP error");
+          } catch { /* ignore logging errors */ }
+        }
+
         return jsonRpcResult(id, {
           content: [{ type: "text", text: error instanceof Error ? error.message : "Unknown MCP error" }],
           isError: true,

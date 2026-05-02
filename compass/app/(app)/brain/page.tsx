@@ -1,7 +1,6 @@
 import { desc } from "drizzle-orm";
-import { getBrainStatus, probeBridgeHealth } from "@/lib/brain/client";
+import { getHermesStatus, probeHermesHealth } from "@/lib/hermes/api-client";
 import { getCompassBrainContext } from "@/lib/brain/context";
-import { loadBrainConfigFromStore } from "@/lib/brain/settings-store";
 import { db } from "@/lib/db/client";
 import { hermesMessages } from "@/lib/db/schema";
 import { formatDateTime } from "@/lib/datetime";
@@ -25,11 +24,10 @@ function StatusPill({ ok, label }: { ok: boolean; label: string }) {
 }
 
 export default async function BrainPage() {
-  const config = await loadBrainConfigFromStore();
-  const status = getBrainStatus(config);
-  const health = await probeBridgeHealth(config);
+  const status = getHermesStatus();
+  const health = await probeHermesHealth();
   const context = await getCompassBrainContext();
-  const brainReady = status.provider === "hermes-bridge" && status.configured && health.reachable;
+  const brainReady = status.configured && health.reachable;
 
   const recentMessages = await db
     .select()

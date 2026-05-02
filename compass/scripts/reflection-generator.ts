@@ -1,9 +1,17 @@
+/**
+ * Weekly reflection generator — cron job that runs every Sunday 20:00.
+ *
+ * v4: Uses callHermes() instead of the old sendBrainMessage/bridge path.
+ * Hermes will call compass.save_review via MCP to persist the reflection.
+ *
+ * [T-41] Phase 4
+ */
+
 import { db } from "@/lib/db/client";
-import { scheduleItems, reflections, coachEvents } from "@/lib/db/schema";
-import { and, eq, gte, lte } from "drizzle-orm";
+import { scheduleItems, coachEvents } from "@/lib/db/schema";
+import { and, gte, lte } from "drizzle-orm";
 import crypto from "node:crypto";
-import { sendBrainMessage } from "@/lib/brain/client";
-import { loadBrainConfigFromStore } from "@/lib/brain/settings-store";
+import { callHermes } from "@/lib/hermes/api-client";
 
 function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -43,57 +51,38 @@ export async function runWeeklyReflection(): Promise<number> {
     skippedTitles.length > 0 ? `跳过任务列表: ${skippedTitles.join("; ")}` : "无跳过任务",
   ].join("\n");
 
-  const config = await loadBrainConfigFromStore();
-  const prompt = `你是用户的严格私教,语气数据驱动、直接、不卖萌、不发感叹号轰炸。基于本周数据生成 150-250 字的周复盘,并提出 1-2 个 follow-up 问题。
+  const prompt = `你是用户的严格私教,需要根据本周数据生成 150-250 字周复盘并保存。
 
 本周数据:
 ${summary}
 
-输出严格按以下格式,不要在 ACTION 块外说话:
+任务:
+1. 生成 150-250 字的周复盘正文,语气直接、数据驱动、不卖萌、不感叹号轰炸
+2. 提出 1-2 个 follow-up 问题
+3. 调用 compass.save_review 工具,period="week",startDate="${startDate}",endDate="${endDate}",title="${startDate} ~ ${endDate} 周复盘",body 包含正文+问题
+4. 工具调用成功后,简短确认即可`;
 
-[[ACTION:save_review]]
-{"period":"week","title":"${startDate} ~ ${endDate} 周复盘","body":"<150-250 字的复盘正文,以及 1-2 个换行后的问题>"}
-[[/ACTION]]`;
-
-  const result = await sendBrainMessage(prompt, { page: "weekly-reflection" }, config);
-  if (!result.ok) {
-    console.error("[weekly-reflection] Brain call failed:", result);
-    return 0;
-  }
-
-  const match = result.response.match(/\[\[ACTION:save_review\]\]\s*([\s\S]*?)\s*\[\[\/ACTION\]\]/i);
-  if (!match) {
-    console.error("[weekly-reflection] Brain response missing action block. Raw:\n", result.response);
-    return 0;
-  }
-
-  let payload: { period: string; title: string; body: string };
-  try {
-    payload = JSON.parse(match[1].trim());
-  } catch (e) {
-    console.error("[weekly-reflection] Failed to parse action block:", e);
-    return 0;
-  }
-
-  const reflectionId = crypto.randomUUID();
-  await db.insert(reflections).values({
-    id: reflectionId,
-    period: "week",
-    startDate,
-    endDate,
-    aiSummary: payload.body,
-    metricsJson: JSON.stringify({ total, done, missed, completionRate, skippedTitles }),
+  const result = await callHermes({
+    userMessage: prompt,
+    sessionId: "cron-weekly-reflection",
   });
 
+  if (!result.ok) {
+    console.error("[weekly-reflection] Hermes call failed:", result.error);
+    return 0;
+  }
+
+  // The reflection is saved by Hermes via MCP (compass.save_review),
+  // so we just need to record the coach event here.
   await db.insert(coachEvents).values({
     id: crypto.randomUUID(),
     type: "weekly_review_initiated",
     severity: "info",
     triggeredBy: "cron",
-    payloadJson: JSON.stringify({ reflectionId, period: "week", startDate, endDate }),
+    payloadJson: JSON.stringify({ period: "week", startDate, endDate }),
   });
 
-  console.log(`[weekly-reflection] Generated reflection ${reflectionId} for ${startDate} ~ ${endDate}`);
+  console.log(`[weekly-reflection] Hermes generated reflection for ${startDate} ~ ${endDate}`);
   return 1;
 }
 

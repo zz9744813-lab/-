@@ -4,8 +4,7 @@ import type { LucideIcon } from "lucide-react";
 import { ArrowRight, CalendarCheck2, Inbox, NotebookPen, PiggyBank, RotateCcw, Target } from "lucide-react";
 import { BrainChatPanel, type BrainChatMessageView } from "@/components/brain/brain-chat-panel";
 import { LiveClock } from "@/components/dashboard/live-clock";
-import { getBrainStatus, probeBridgeHealth } from "@/lib/brain/client";
-import { loadBrainConfigFromStore } from "@/lib/brain/settings-store";
+import { getHermesStatus, probeHermesHealth } from "@/lib/hermes/api-client";
 import { db } from "@/lib/db/client";
 import { captures, goals, hermesMessages, journalEntries, scheduleItems } from "@/lib/db/schema";
 import { formatDateTime, localDateString } from "@/lib/datetime";
@@ -62,10 +61,9 @@ export default async function DashboardPage() {
     ]);
 
   const recentMessages = await db.select().from(hermesMessages).orderBy(desc(hermesMessages.createdAt)).limit(8);
-  const config = await loadBrainConfigFromStore();
-  const status = getBrainStatus(config);
-  const health = await probeBridgeHealth(config);
-  const brainReady = status.provider === "hermes-bridge" && status.configured && health.reachable;
+  const status = getHermesStatus();
+  const health = await probeHermesHealth();
+  const brainReady = status.configured && health.reachable;
   const brainStatusLabel = brainReady
     ? `已连接 · ${health.latencyMs} ms`
     : health.reachable

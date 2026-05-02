@@ -15,12 +15,9 @@ export type BrainChatAttachmentView = {
 
 export type BrainChatCompassAction = {
   type: string;
-  ok: boolean;
-  result?: unknown;
-  error?: string;
-  needsInput?: boolean;
-  missing?: string[];
-  ask?: string;
+  status: "success" | "failed";
+  payloadJson?: string;
+  errorMessage?: string | null;
 };
 
 export type BrainChatMessageView = {
@@ -40,15 +37,12 @@ type DiagnosticsResult = {
   hermesBridgeUrl: string | null;
   hasToken: boolean;
   configured: boolean;
-  reachable?: boolean;
   bridgeReachable?: boolean;
   bridgeLatencyMs?: number | null;
   bridgeService?: string | null;
   chatReady?: boolean;
   reason: string | null;
   debugReason: string | null;
-  latencyMs?: number | null;
-  service?: string | null;
   bridgeDiagnostics?: { fallbackEnabled?: boolean; canImportAIAgent?: boolean; [key: string]: unknown } | null;
   recommendations: string[];
 };
@@ -90,10 +84,9 @@ function fileToAttachment(file: File): BrainChatAttachmentView {
 
 function CompassActionsSummary({ actions }: { actions: BrainChatCompassAction[] }) {
   if (!actions || actions.length === 0) return null;
-  const ok = actions.filter((a) => a.ok && !a.needsInput);
-  const failed = actions.filter((a) => !a.ok && !a.needsInput);
-  const needsInput = actions.filter((a) => a.needsInput);
-  if (ok.length === 0 && failed.length === 0 && needsInput.length === 0) return null;
+  const ok = actions.filter((a) => a.status === "success");
+  const failed = actions.filter((a) => a.status === "failed");
+  if (ok.length === 0 && failed.length === 0) return null;
 
   const labels: Record<string, string> = {
     create_goal: "目标",
@@ -123,15 +116,12 @@ function CompassActionsSummary({ actions }: { actions: BrainChatCompassAction[] 
           {failed.length > 0 && <span className="text-red-300 ml-2">失败 {failed.length} 项</span>}
         </div>
       )}
-      {needsInput.map((a, i) => (
-        <div key={i} className="rounded-md border border-amber-400/30 bg-amber-500/10 px-3 py-3 text-sm">
-          <p className="text-amber-200 font-medium flex items-center gap-2">
-            <AlertTriangle size={14} /> 需要补充信息 ({labels[a.type] ?? a.type})
+      {failed.map((a, i) => (
+        <div key={i} className="rounded-md border border-red-400/30 bg-red-500/10 px-3 py-3 text-sm">
+          <p className="text-red-200 font-medium flex items-center gap-2">
+            <AlertTriangle size={14} /> 工具调用失败 ({labels[a.type] ?? a.type})
           </p>
-          <p className="text-amber-100/80 mt-1">{a.ask}</p>
-          {a.missing && a.missing.length > 0 && (
-            <p className="text-xs text-amber-300/50 mt-2">缺少字段: {a.missing.join(', ')}</p>
-          )}
+          <p className="text-red-100/80 mt-1">{a.errorMessage}</p>
         </div>
       ))}
     </div>
@@ -168,14 +158,14 @@ function OfflineDiagnostics({ onRetry }: { onRetry: () => void }) {
 
       {diag && (
         <div className="text-xs text-text-secondary space-y-1">
-          <p>状态：{diag.reason ?? (diag.bridgeReachable || diag.reachable ? "可达" : "未知")}</p>
+          <p>状态：{diag.reason ?? (diag.bridgeReachable ? "可达" : "未知")}</p>
           {diag.hermesBridgeUrl && <p>Bridge URL：<span className="font-mono">{diag.hermesBridgeUrl}</span></p>}
           <p>Token：{diag.hasToken ? "已配置" : "未配置"}</p>
           {diag.chatReady !== undefined && <p>模型就绪：{diag.chatReady ? "是" : "否"}</p>}
         </div>
       )}
 
-      {diag && diag.recommendations.length > 0 && (
+      {diag && diag.recommendations && diag.recommendations.length > 0 && (
         <button
           onClick={() => setExpanded(!expanded)}
           className="flex items-center gap-1 text-xs text-text-tertiary hover:text-text-secondary"
@@ -185,7 +175,7 @@ function OfflineDiagnostics({ onRetry }: { onRetry: () => void }) {
         </button>
       )}
 
-      {expanded && diag && (
+      {expanded && diag && diag.recommendations && (
         <ul className="text-xs text-text-tertiary space-y-1 pl-4 list-disc">
           {diag.recommendations.map((r, i) => (
             <li key={i}>{r}</li>
@@ -241,6 +231,8 @@ export function BrainChatPanel({
   const formRef = useRef<HTMLFormElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const canSubmit = !disabled && !isSending && (message.trim().length > 0 || files.length > 0);
+  
+  const currentReqStartMs = useRef<number>(0);
 
   async function loadDiagnostics() {
     try {
@@ -253,18 +245,6 @@ export function BrainChatPanel({
   }
 
   async function loadMessages() {
-    try {
-      const response = await fetch("/api/brain/messages?limit=40", { cache: "no-store" });
-      const payload = (await response.json().catch(() => ({}))) as {
-        ok?: boolean;
-        messages?: BrainChatMessageView[];
-      };
-      if (response.ok && payload.ok && Array.isArray(payload.messages)) {
-        setMessages(payload.messages);
-      }
-    } catch {
-      // Keep existing messages
-    }
   }
 
   useEffect(() => {
@@ -312,6 +292,32 @@ export function BrainChatPanel({
   function handleRetry() {
     window.location.reload();
   }
+  
+  async function pollOperations(assistantMsgId: string, since: number) {
+    try {
+      const res = await fetch(`/api/operations/recent?since=${since}`);
+      const data = await res.json();
+      if (data.actions && data.actions.length > 0) {
+        setMessages((curr) => {
+          const idx = curr.findIndex(m => m.id === assistantMsgId);
+          if (idx === -1) return curr;
+          
+          const updated = { ...curr[idx] };
+          updated.compassActions = data.actions.map((a: any) => ({
+            type: a.type,
+            status: a.status,
+            payloadJson: a.payloadJson,
+            errorMessage: a.errorMessage
+          }));
+          
+          const newArr = [...curr];
+          newArr[idx] = updated;
+          return newArr;
+        });
+      }
+    } catch {
+    }
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -332,92 +338,97 @@ export function BrainChatPanel({
     setFiles([]);
     setError(null);
     setIsSending(true);
+    currentReqStartMs.current = Date.now();
 
     const formData = new FormData();
     formData.append("message", text);
     formData.append("source", source);
+    formData.append("sessionId", "compass-ui-session");
     for (const file of selectedFiles) formData.append("files", file);
+
+    const assistantMsgId = `assistant-${Date.now()}`;
+    const newAssistantMsg: BrainChatMessageView = {
+      id: assistantMsgId,
+      role: "assistant",
+      content: "",
+      createdAt: nowLabel(),
+      compassActions: []
+    };
+    
+    setMessages((current) => {
+      const withoutLocal = current.filter((item) => item.id !== localUser.id);
+      return [...withoutLocal, localUser, newAssistantMsg];
+    });
 
     try {
       const response = await fetch("/api/brain/chat", { method: "POST", body: formData });
       if (!response.ok) throw new Error(`请求失败：HTTP ${response.status}`);
       if (!response.body) throw new Error("服务器没有返回流");
 
-      const newAssistantMsg: BrainChatMessageView = {
-        id: `assistant-${Date.now()}`,
-        role: "assistant",
-        content: "",
-        createdAt: nowLabel(),
-        compassActions: []
-      };
-
-      setMessages((current) => {
-        const withoutLocal = current.filter((item) => item.id !== localUser.id);
-        return [...withoutLocal, localUser, newAssistantMsg];
-      });
-
       const reader = response.body.getReader();
       const decoder = new TextDecoder("utf-8");
       let done = false;
       let buffer = "";
+
+      const pollInterval = setInterval(() => {
+        pollOperations(assistantMsgId, currentReqStartMs.current);
+      }, 2000);
 
       while (!done) {
         const { value, done: doneReading } = await reader.read();
         done = doneReading;
         if (value) {
           buffer += decoder.decode(value, { stream: true });
-          const parts = buffer.split("\\n\\n");
+          const parts = buffer.split("\n\n");
           buffer = parts.pop() || "";
 
           for (const part of parts) {
             if (part.startsWith("data: ")) {
               const dataStr = part.slice(6);
+              if (dataStr === "[DONE]") {
+                continue;
+              }
               try {
                 const event = JSON.parse(dataStr);
-                setMessages((curr) => {
-                  const last = curr[curr.length - 1];
-                  if (last.id !== newAssistantMsg.id) return curr;
-
-                  const updated = { ...last };
-
-                  if (event.type === 'text') {
-                    updated.content += event.delta;
-                  } else if (event.type === 'action_complete' || event.type === 'needs_input') {
-                    updated.compassActions = [...(updated.compassActions || []), {
-                       type: event.actionType,
-                       ok: event.type === 'action_complete',
-                       result: event.payload || event.draft,
-                       needsInput: event.type === 'needs_input',
-                       missing: event.missing,
-                       ask: event.ask,
-                    }];
-                  } else if (event.type === 'error') {
-                    // handled by catch
-                  }
-
-                  return [...curr.slice(0, -1), updated];
-                });
+                if (event.choices && event.choices[0]?.delta?.content) {
+                  setMessages((curr) => {
+                    const idx = curr.findIndex(m => m.id === assistantMsgId);
+                    if (idx === -1) return curr;
+                    
+                    const updated = { ...curr[idx] };
+                    updated.content += event.choices[0].delta.content;
+                    
+                    const newArr = [...curr];
+                    newArr[idx] = updated;
+                    return newArr;
+                  });
+                }
               } catch (e) {
-                // ignore partial JSON parse error
               }
             }
           }
         }
       }
+      
+      clearInterval(pollInterval);
+      await pollOperations(assistantMsgId, currentReqStartMs.current);
+      
     } catch (err) {
       const rawError = err instanceof Error ? err.message : "发送失败";
       setError(rawError);
 
-      setMessages((current) => [
-        ...current,
-        {
-          id: `local-error-${Date.now()}`,
-          role: "assistant",
-          content: "发生错误：" + rawError,
-          createdAt: nowLabel(),
-          bridgeOk: false,
-        },
-      ]);
+      setMessages((current) => {
+        const idx = current.findIndex(m => m.id === assistantMsgId);
+        if (idx !== -1) {
+          const updated = { ...current[idx] };
+          updated.content += "\n\n(发生错误: " + rawError + ")";
+          updated.bridgeOk = false;
+          const newArr = [...current];
+          newArr[idx] = updated;
+          return newArr;
+        }
+        return current;
+      });
     } finally {
       setIsSending(false);
       textareaRef.current?.focus();
@@ -466,7 +477,6 @@ export function BrainChatPanel({
         </div>
       </div>
 
-      {/* Offline diagnostics */}
       {disabled && !isLive && (
         <div className="mt-4">
           <OfflineDiagnostics onRetry={handleRetry} />
@@ -594,7 +604,7 @@ export function BrainChatPanel({
           <div className="rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs text-text-secondary space-y-1">
             <p>Bridge：{diagResult.bridgeReachable ? "可达" : "不可达"} {diagResult.bridgeLatencyMs ? `· ${diagResult.bridgeLatencyMs}ms` : ""}</p>
             <p>模型就绪：{diagResult.chatReady ? "是" : "否"}</p>
-            {diagResult.bridgeDiagnostics && <p>Fallback：{diagResult.bridgeDiagnostics.fallbackEnabled ? "已启用" : "关闭"}</p>}
+            {diagResult.bridgeDiagnostics && diagResult.bridgeDiagnostics.fallbackEnabled && <p>Fallback：已启用</p>}
             {diagResult.reason && <p className="text-amber-300">{diagResult.reason}</p>}
           </div>
         )}
