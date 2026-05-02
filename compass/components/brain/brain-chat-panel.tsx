@@ -37,11 +37,16 @@ type DiagnosticsResult = {
   hermesBridgeUrl: string | null;
   hasToken: boolean;
   configured: boolean;
-  reachable: boolean;
+  reachable?: boolean;
+  bridgeReachable?: boolean;
+  bridgeLatencyMs?: number | null;
+  bridgeService?: string | null;
+  chatReady?: boolean;
   reason: string | null;
   debugReason: string | null;
-  latencyMs: number | null;
-  service: string | null;
+  latencyMs?: number | null;
+  service?: string | null;
+  bridgeDiagnostics?: { fallbackEnabled?: boolean; canImportAIAgent?: boolean; [key: string]: unknown } | null;
   recommendations: string[];
 };
 
@@ -141,9 +146,10 @@ function OfflineDiagnostics({ onRetry }: { onRetry: () => void }) {
 
       {diag && (
         <div className="text-xs text-text-secondary space-y-1">
-          <p>状态：{diag.reason ?? "未知"}</p>
+          <p>状态：{diag.reason ?? (diag.bridgeReachable || diag.reachable ? "可达" : "未知")}</p>
           {diag.hermesBridgeUrl && <p>Bridge URL：<span className="font-mono">{diag.hermesBridgeUrl}</span></p>}
           <p>Token：{diag.hasToken ? "已配置" : "未配置"}</p>
+          {diag.chatReady !== undefined && <p>模型就绪：{diag.chatReady ? "是" : "否"}</p>}
         </div>
       )}
 
