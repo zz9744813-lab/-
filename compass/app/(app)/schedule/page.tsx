@@ -24,7 +24,7 @@ export default async function SchedulePage() {
       startTime: row.startTime,
       endTime: row.endTime,
       status: row.status,
-      completedAt: row.completedAt,
+      completedAt: row.completedAt ? row.completedAt.toISOString() : null,
       completionNote: row.completionNote,
     };
     return {
