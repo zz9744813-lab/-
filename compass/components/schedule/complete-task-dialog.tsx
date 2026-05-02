@@ -26,7 +26,7 @@ export function CompleteTaskDialog({
         className="glass w-full max-w-md p-6 space-y-4 mx-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-lg font-semibold">完成任务</h3>
+        <h3 className="text-lg font-semibold">完成并复盘</h3>
         <p className="text-sm text-text-secondary">{item.title}</p>
 
         {/* Completion mode */}

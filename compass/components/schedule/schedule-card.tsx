@@ -2,16 +2,16 @@
 
 import { useState } from "react";
 import {
-  Play,
   CheckCircle2,
   Clock,
-  SkipForward,
   XCircle,
   RotateCcw,
   ChevronDown,
   ChevronUp,
   History,
+  CalendarClock,
 } from "lucide-react";
+import { type SchedulePhase, getPhaseBadge } from "@/lib/schedule/phase";
 
 export type ScheduleCardItem = {
   id: string;
@@ -30,21 +30,13 @@ export type ScheduleCardItem = {
   delayReason: string | null;
   skipReason: string | null;
   cancelReason: string | null;
+  phase: SchedulePhase;
 };
 
 const PRIORITY_BADGE: Record<string, { label: string; cls: string }> = {
   high: { label: "高", cls: "border-red-400/40 bg-red-500/15 text-red-200" },
   medium: { label: "中", cls: "border-blue-400/40 bg-blue-500/15 text-blue-200" },
   low: { label: "低", cls: "border-white/10 bg-white/5 text-text-tertiary" },
-};
-
-const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
-  planned: { label: "待执行", cls: "border-blue-400/40 bg-blue-500/15 text-blue-200" },
-  in_progress: { label: "进行中", cls: "border-amber-400/40 bg-amber-500/15 text-amber-200" },
-  done: { label: "已完成", cls: "border-emerald-400/40 bg-emerald-500/15 text-emerald-200" },
-  delayed: { label: "已延期", cls: "border-orange-400/40 bg-orange-500/15 text-orange-200" },
-  skipped: { label: "已跳过", cls: "border-white/10 bg-white/5 text-text-tertiary" },
-  cancelled: { label: "已取消", cls: "border-white/10 bg-white/5 text-text-tertiary line-through" },
 };
 
 type ActionConfig = {
@@ -56,46 +48,53 @@ type ActionConfig = {
 
 export function ScheduleCard({
   item,
-  onStart,
   onComplete,
-  onDelay,
-  onSkip,
+  onMiss,
+  onReschedule,
   onCancel,
   onReopen,
   onViewEvents,
 }: {
   item: ScheduleCardItem;
-  onStart: () => void;
   onComplete: () => void;
-  onDelay: () => void;
-  onSkip: () => void;
+  onMiss: () => void;
+  onReschedule: () => void;
   onCancel: () => void;
   onReopen: () => void;
   onViewEvents: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const pBadge = PRIORITY_BADGE[item.priority] ?? PRIORITY_BADGE.medium;
-  const sBadge = STATUS_BADGE[item.status] ?? STATUS_BADGE.planned;
+  const sBadge = getPhaseBadge(item.phase);
 
   const actions: ActionConfig[] = [];
 
-  if (item.status === "planned") {
-    actions.push({ label: "开始", icon: <Play size={13} />, tone: "primary", onClick: onStart });
-    actions.push({ label: "延期", icon: <Clock size={13} />, tone: "warn", onClick: onDelay });
-    actions.push({ label: "跳过", icon: <SkipForward size={13} />, tone: "muted", onClick: onSkip });
-  } else if (item.status === "in_progress") {
-    actions.push({ label: "完成", icon: <CheckCircle2 size={13} />, tone: "ok", onClick: onComplete });
-    actions.push({ label: "延期", icon: <Clock size={13} />, tone: "warn", onClick: onDelay });
-  } else if (item.status === "done") {
-    actions.push({ label: "查看复盘", icon: <History size={13} />, tone: "muted", onClick: onViewEvents });
-  } else if (item.status === "delayed") {
-    actions.push({ label: "重新安排", icon: <RotateCcw size={13} />, tone: "primary", onClick: onStart });
-    actions.push({ label: "取消", icon: <XCircle size={13} />, tone: "danger", onClick: onCancel });
-  } else if (item.status === "skipped") {
-    actions.push({ label: "重新安排", icon: <RotateCcw size={13} />, tone: "primary", onClick: onStart });
-  } else if (item.status === "cancelled") {
-    actions.push({ label: "查看原因", icon: <History size={13} />, tone: "muted", onClick: onViewEvents });
-    actions.push({ label: "重新打开", icon: <RotateCcw size={13} />, tone: "primary", onClick: onReopen });
+  switch (item.phase) {
+    case "future":
+    case "upcoming":
+      actions.push({ label: "调整时间", icon: <CalendarClock size={13} />, tone: "primary", onClick: onReschedule });
+      actions.push({ label: "取消", icon: <XCircle size={13} />, tone: "danger", onClick: onCancel });
+      break;
+    case "active":
+      actions.push({ label: "完成并复盘", icon: <CheckCircle2 size={13} />, tone: "ok", onClick: onComplete });
+      actions.push({ label: "取消", icon: <XCircle size={13} />, tone: "danger", onClick: onCancel });
+      break;
+    case "ended_waiting_feedback":
+      actions.push({ label: "填写反馈", icon: <CheckCircle2 size={13} />, tone: "ok", onClick: onComplete });
+      actions.push({ label: "标记未完成", icon: <XCircle size={13} />, tone: "warn", onClick: onMiss });
+      actions.push({ label: "重新安排", icon: <RotateCcw size={13} />, tone: "primary", onClick: onReschedule });
+      break;
+    case "done":
+      actions.push({ label: "查看复盘", icon: <History size={13} />, tone: "muted", onClick: onViewEvents });
+      break;
+    case "missed":
+      actions.push({ label: "重新安排", icon: <RotateCcw size={13} />, tone: "primary", onClick: onReschedule });
+      actions.push({ label: "查看记录", icon: <History size={13} />, tone: "muted", onClick: onViewEvents });
+      break;
+    case "cancelled":
+      actions.push({ label: "重新打开", icon: <RotateCcw size={13} />, tone: "primary", onClick: onReopen });
+      actions.push({ label: "查看原因", icon: <History size={13} />, tone: "muted", onClick: onViewEvents });
+      break;
   }
 
   const toneBtn: Record<string, string> = {
@@ -106,12 +105,12 @@ export function ScheduleCard({
     muted: "border-white/10 bg-white/5 text-text-secondary hover:bg-white/10",
   };
 
+  const isDimmed = item.phase === "done" || item.phase === "cancelled" || item.phase === "missed";
+
   return (
     <div
       className={`rounded-xl border transition-all duration-200 ${
-        item.status === "done" || item.status === "cancelled"
-          ? "border-white/5 opacity-60"
-          : "border-white/10 hover:border-white/20"
+        isDimmed ? "border-white/5 opacity-60" : "border-white/10 hover:border-white/20"
       } bg-white/[0.03]`}
     >
       <div className="p-4">
@@ -127,9 +126,9 @@ export function ScheduleCard({
               )}
             </div>
             <h3 className="text-sm font-medium text-text-primary truncate">{item.title}</h3>
-            {item.startTime && (
+            {(item.startTime || item.endTime) && (
               <p className="text-xs text-text-tertiary mt-1 font-mono">
-                {item.startTime}{item.endTime ? ` – ${item.endTime}` : ""}
+                {item.startTime || ""}{item.endTime ? ` – ${item.endTime}` : ""}
               </p>
             )}
           </div>
@@ -169,34 +168,16 @@ export function ScheduleCard({
         {expanded && (
           <div className="mt-2 space-y-2 text-xs text-text-secondary border-t border-white/5 pt-2">
             {item.description && (
-              <div>
-                <span className="text-text-tertiary">描述：</span>
-                {item.description}
-              </div>
+              <div><span className="text-text-tertiary">描述：</span>{item.description}</div>
             )}
             {item.completionNote && (
-              <div>
-                <span className="text-text-tertiary">完成反馈：</span>
-                {item.completionNote}
-              </div>
+              <div><span className="text-text-tertiary">完成反馈：</span>{item.completionNote}</div>
             )}
-            {item.delayReason && (
-              <div>
-                <span className="text-text-tertiary">延期原因：</span>
-                {item.delayReason}
-              </div>
-            )}
-            {item.skipReason && (
-              <div>
-                <span className="text-text-tertiary">跳过原因：</span>
-                {item.skipReason}
-              </div>
+            {(item.delayReason || item.skipReason) && (
+              <div><span className="text-text-tertiary">原因：</span>{item.delayReason || item.skipReason}</div>
             )}
             {item.cancelReason && (
-              <div>
-                <span className="text-text-tertiary">取消原因：</span>
-                {item.cancelReason}
-              </div>
+              <div><span className="text-text-tertiary">取消原因：</span>{item.cancelReason}</div>
             )}
           </div>
         )}

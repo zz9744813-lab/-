@@ -1,16 +1,15 @@
 "use client";
 
-import { CalendarClock, CheckCircle2, AlertTriangle, Clock, Zap } from "lucide-react";
+import { CalendarClock, CheckCircle2, Clock, AlertTriangle, Zap } from "lucide-react";
 
 export type TodayStats = {
   total: number;
+  active: number;
+  endedWaitingFeedback: number;
   done: number;
-  delayed: number;
-  skipped: number;
-  inProgress: number;
-  planned: number;
-  nextTask: { title: string; startTime: string | null; date: string } | null;
   completionRate: number;
+  currentTask: { title: string; startTime: string | null } | null;
+  nextTask: { title: string; startTime: string | null } | null;
 };
 
 export function TodayFocusPanel({ stats }: { stats: TodayStats }) {
@@ -41,9 +40,9 @@ export function TodayFocusPanel({ stats }: { stats: TodayStats }) {
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-5 mb-4">
         <StatCard icon={<CalendarClock size={14} />} label="今日任务" value={stats.total} />
+        <StatCard icon={<Clock size={14} />} label="进行中" value={stats.active} tone="info" />
+        <StatCard icon={<AlertTriangle size={14} />} label="待反馈" value={stats.endedWaitingFeedback} tone="warn" />
         <StatCard icon={<CheckCircle2 size={14} />} label="已完成" value={stats.done} tone="ok" />
-        <StatCard icon={<Clock size={14} />} label="进行中" value={stats.inProgress} tone="info" />
-        <StatCard icon={<AlertTriangle size={14} />} label="延期/跳过" value={stats.delayed + stats.skipped} tone="warn" />
         <StatCard
           icon={<CheckCircle2 size={14} />}
           label="完成率"
@@ -52,14 +51,21 @@ export function TodayFocusPanel({ stats }: { stats: TodayStats }) {
         />
       </div>
 
-      {stats.nextTask ? (
+      {stats.endedWaitingFeedback > 0 ? (
+        <div className="rounded-lg border border-orange-400/20 bg-orange-500/5 p-3">
+          <p className="text-sm text-orange-200">有 {stats.endedWaitingFeedback} 项任务已结束，等待你的反馈</p>
+        </div>
+      ) : stats.currentTask ? (
+        <div className="rounded-lg border border-amber-400/20 bg-amber-500/5 p-3">
+          <p className="text-xs text-text-tertiary mb-1">当前任务</p>
+          <p className="text-sm font-medium text-text-primary">{stats.currentTask.title}</p>
+          {stats.currentTask.startTime && <p className="text-xs text-text-secondary mt-1">{stats.currentTask.startTime}</p>}
+        </div>
+      ) : stats.nextTask ? (
         <div className="rounded-lg border border-accent/20 bg-accent/5 p-3">
           <p className="text-xs text-text-tertiary mb-1">下一项任务</p>
           <p className="text-sm font-medium text-text-primary">{stats.nextTask.title}</p>
-          <p className="text-xs text-text-secondary mt-1">
-            {stats.nextTask.startTime ? `${stats.nextTask.startTime} · ` : ""}
-            {stats.nextTask.date}
-          </p>
+          {stats.nextTask.startTime && <p className="text-xs text-text-secondary mt-1">{stats.nextTask.startTime}</p>}
         </div>
       ) : stats.total === 0 ? (
         <div className="rounded-lg border border-white/5 bg-white/[0.02] p-3 text-sm text-text-secondary">

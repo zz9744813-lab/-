@@ -301,6 +301,8 @@ ensureColumn("schedule_items", "quick_complete", "INTEGER NOT NULL DEFAULT 0");
 ensureColumn("schedule_items", "delay_reason", "TEXT");
 ensureColumn("schedule_items", "skip_reason", "TEXT");
 ensureColumn("schedule_items", "cancel_reason", "TEXT");
+ensureColumn("schedule_items", "miss_reason", "TEXT");
+ensureColumn("schedule_items", "reschedule_reason", "TEXT");
 
 const timestampColumns: Record<string, string[]> = {
   captures: ["created_at"],

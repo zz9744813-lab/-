@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import { scheduleItems, scheduleEvents } from "@/lib/db/schema";
 
-const STATUSES = new Set(["planned", "in_progress", "done", "delayed", "skipped", "cancelled"]);
+const STATUSES = new Set(["planned", "in_progress", "done", "delayed", "skipped", "cancelled", "missed"]);
 const PRIORITIES = new Set(["low", "medium", "high"]);
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^\d{2}:\d{2}$/;
@@ -31,6 +31,7 @@ async function logEvent(
 
 // ── Status transition actions ─────────────────────────────
 
+// Deprecated: kept for backward compat, no longer used in UI
 export async function startScheduleItem(id: string) {
   const [item] = await db.select().from(scheduleItems).where(eq(scheduleItems.id, id)).limit(1);
   if (!item || item.status !== "planned") return;
@@ -82,6 +83,75 @@ export async function completeScheduleItem(
   revalidatePath("/dashboard");
 }
 
+export async function missScheduleItem(
+  id: string,
+  payload: { reason: string; note?: string; reviewScore?: number },
+) {
+  const [item] = await db.select().from(scheduleItems).where(eq(scheduleItems.id, id)).limit(1);
+  if (!item || item.status === "done" || item.status === "cancelled" || item.status === "missed") return;
+
+  const fromStatus = item.status;
+  await db
+    .update(scheduleItems)
+    .set({
+      status: "missed",
+      skipReason: payload.reason,
+      reviewScore: payload.reviewScore ?? null,
+      updatedAt: new Date(),
+    })
+    .where(eq(scheduleItems.id, id));
+
+  await logEvent(id, "missed", {
+    fromStatus,
+    toStatus: "missed",
+    reason: payload.reason,
+    note: payload.note,
+  });
+  revalidatePath("/schedule");
+  revalidatePath("/dashboard");
+}
+
+export async function rescheduleScheduleItem(
+  id: string,
+  payload: {
+    newDate: string;
+    newStartTime?: string;
+    newEndTime?: string;
+    reason?: string;
+    note?: string;
+  },
+) {
+  if (!DATE_RE.test(payload.newDate)) return;
+  const [item] = await db.select().from(scheduleItems).where(eq(scheduleItems.id, id)).limit(1);
+  if (!item || item.status === "done" || item.status === "cancelled") return;
+
+  const fromStatus = item.status;
+  const patch: Record<string, unknown> = {
+    status: "planned",
+    date: payload.newDate,
+    updatedAt: new Date(),
+  };
+  if (payload.newStartTime && TIME_RE.test(payload.newStartTime)) {
+    patch.startTime = payload.newStartTime;
+  }
+  if (payload.newEndTime && TIME_RE.test(payload.newEndTime)) {
+    patch.endTime = payload.newEndTime;
+  }
+
+  await db.update(scheduleItems).set(patch).where(eq(scheduleItems.id, id));
+
+  await logEvent(id, "rescheduled", {
+    fromStatus,
+    toStatus: "planned",
+    reason: payload.reason,
+    note: payload.note,
+    payload: { newDate: payload.newDate, newStartTime: payload.newStartTime, newEndTime: payload.newEndTime },
+  });
+  revalidatePath("/schedule");
+  revalidatePath("/dashboard");
+}
+
+// Deprecated: kept for backward compat, use rescheduleScheduleItem
 export async function delayScheduleItem(
   id: string,
   payload: {
@@ -91,49 +161,20 @@ export async function delayScheduleItem(
     note?: string;
   },
 ) {
-  if (!DATE_RE.test(payload.newDate)) return;
-  const [item] = await db.select().from(scheduleItems).where(eq(scheduleItems.id, id)).limit(1);
-  if (!item || item.status === "done" || item.status === "cancelled") return;
-
-  const fromStatus = item.status;
-  await db
-    .update(scheduleItems)
-    .set({
-      status: "delayed",
-      date: payload.newDate,
-      startTime: payload.newStartTime && TIME_RE.test(payload.newStartTime) ? payload.newStartTime : item.startTime,
-      delayReason: payload.reason,
-      updatedAt: new Date(),
-    })
-    .where(eq(scheduleItems.id, id));
-
-  await logEvent(id, "delayed", {
-    fromStatus,
-    toStatus: "delayed",
+  return rescheduleScheduleItem(id, {
+    newDate: payload.newDate,
+    newStartTime: payload.newStartTime,
     reason: payload.reason,
     note: payload.note,
-    payload: { newDate: payload.newDate, newStartTime: payload.newStartTime },
   });
-  revalidatePath("/schedule");
-  revalidatePath("/dashboard");
 }
 
+// Deprecated: kept for backward compat, use missScheduleItem
 export async function skipScheduleItem(
   id: string,
   payload: { reason: string; note?: string },
 ) {
-  const [item] = await db.select().from(scheduleItems).where(eq(scheduleItems.id, id)).limit(1);
-  if (!item || item.status === "done" || item.status === "cancelled") return;
-
-  const fromStatus = item.status;
-  await db
-    .update(scheduleItems)
-    .set({ status: "skipped", skipReason: payload.reason, updatedAt: new Date() })
-    .where(eq(scheduleItems.id, id));
-
-  await logEvent(id, "skipped", { fromStatus, toStatus: "skipped", reason: payload.reason, note: payload.note });
-  revalidatePath("/schedule");
-  revalidatePath("/dashboard");
+  return missScheduleItem(id, payload);
 }
 
 export async function cancelScheduleItem(

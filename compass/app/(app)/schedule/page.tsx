@@ -3,6 +3,7 @@ import { ScheduleBoard } from "@/components/schedule/schedule-board";
 import { type ScheduleCardItem } from "@/components/schedule/schedule-card";
 import { TodayFocusPanel, type TodayStats } from "@/components/schedule/today-focus-panel";
 import { createScheduleAction } from "@/lib/actions/schedule";
+import { getSchedulePhase } from "@/lib/schedule/phase";
 import { db } from "@/lib/db/client";
 import { scheduleItems } from "@/lib/db/schema";
 
@@ -10,51 +11,61 @@ export const dynamic = "force-dynamic";
 
 export default async function SchedulePage() {
   const today = new Date().toISOString().slice(0, 10);
+  const now = new Date();
 
   const list = await db
     .select()
     .from(scheduleItems)
     .orderBy(asc(scheduleItems.date), asc(scheduleItems.startTime));
 
-  const items: ScheduleCardItem[] = list.map((row) => ({
-    id: row.id,
-    date: row.date,
-    startTime: row.startTime,
-    endTime: row.endTime,
-    title: row.title,
-    description: row.description,
-    priority: row.priority,
-    status: row.status,
-    source: row.source,
-    completedAt: row.completedAt ? row.completedAt.toISOString() : null,
-    completionNote: row.completionNote,
-    reviewScore: row.reviewScore,
-    quickComplete: row.quickComplete ?? false,
-    delayReason: row.delayReason,
-    skipReason: row.skipReason,
-    cancelReason: row.cancelReason,
-  }));
+  const items: ScheduleCardItem[] = list.map((row) => {
+    const phaseItem = {
+      date: row.date,
+      startTime: row.startTime,
+      endTime: row.endTime,
+      status: row.status,
+      completedAt: row.completedAt,
+      completionNote: row.completionNote,
+    };
+    return {
+      id: row.id,
+      date: row.date,
+      startTime: row.startTime,
+      endTime: row.endTime,
+      title: row.title,
+      description: row.description,
+      priority: row.priority,
+      status: row.status,
+      source: row.source,
+      completedAt: row.completedAt ? row.completedAt.toISOString() : null,
+      completionNote: row.completionNote,
+      reviewScore: row.reviewScore,
+      quickComplete: row.quickComplete ?? false,
+      delayReason: row.delayReason,
+      skipReason: row.skipReason,
+      cancelReason: row.cancelReason,
+      phase: getSchedulePhase(phaseItem, now),
+    };
+  });
 
-  // Compute today stats
+  // Compute today stats using phases
   const todayItems = items.filter((i) => i.date === today);
-  const done = todayItems.filter((i) => i.status === "done").length;
-  const delayed = todayItems.filter((i) => i.status === "delayed").length;
-  const skipped = todayItems.filter((i) => i.status === "skipped").length;
-  const inProgress = todayItems.filter((i) => i.status === "in_progress").length;
-  const planned = todayItems.filter((i) => i.status === "planned").length;
   const total = todayItems.length;
+  const done = todayItems.filter((i) => i.phase === "done").length;
+  const active = todayItems.filter((i) => i.phase === "active").length;
+  const endedWaitingFeedback = todayItems.filter((i) => i.phase === "ended_waiting_feedback").length;
 
-  const nextTask = todayItems.find((i) => i.status === "planned" || i.status === "in_progress") ?? null;
+  const currentTask = todayItems.find((i) => i.phase === "active") ?? null;
+  const nextTask = todayItems.find((i) => i.phase === "upcoming") ?? null;
 
   const todayStats: TodayStats = {
     total,
+    active,
+    endedWaitingFeedback,
     done,
-    delayed,
-    skipped,
-    inProgress,
-    planned,
-    nextTask: nextTask ? { title: nextTask.title, startTime: nextTask.startTime, date: nextTask.date } : null,
     completionRate: total > 0 ? done / total : 0,
+    currentTask: currentTask ? { title: currentTask.title, startTime: currentTask.startTime } : null,
+    nextTask: nextTask ? { title: nextTask.title, startTime: nextTask.startTime } : null,
   };
 
   const defaultReminderEmail = process.env.COMPASS_REMINDER_EMAIL ?? "";

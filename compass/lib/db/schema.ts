@@ -150,6 +150,8 @@ export const scheduleItems = sqliteTable("schedule_items", {
   delayReason: text("delay_reason"),
   skipReason: text("skip_reason"),
   cancelReason: text("cancel_reason"),
+  missReason: text("miss_reason"),
+  rescheduleReason: text("reschedule_reason"),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
 });
