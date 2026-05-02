@@ -79,6 +79,7 @@ export const ActionSchemas = {
   }),
   propose_phase: z.object({
     planId: z.string(),
+    orderIndex: z.number().int().min(0),
     title: z.string().min(1),
     startDate: dateStr,
     endDate: dateStr,

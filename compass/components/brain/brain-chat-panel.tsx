@@ -411,7 +411,7 @@ export function BrainChatPanel({
       setMessages((current) => [
         ...current,
         {
-          id: \`local-error-\${Date.now()}\`,
+          id: `local-error-${Date.now()}`,
           role: "assistant",
           content: "发生错误：" + rawError,
           createdAt: nowLabel(),

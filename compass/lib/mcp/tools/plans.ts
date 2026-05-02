@@ -23,6 +23,7 @@ export const proposePhaseTool: McpTool = {
   async execute(params) {
     const id = await createPlanPhase({
       planId: String(params.planId),
+      orderIndex: typeof params.orderIndex === "number" ? params.orderIndex : 0,
       title: String(params.title),
       startDate: String(params.startDate),
       endDate: String(params.endDate),

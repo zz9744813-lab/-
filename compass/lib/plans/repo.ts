@@ -98,6 +98,7 @@ export async function createPlan(data: {
 
 export async function createPlanPhase(data: {
   planId: string;
+  orderIndex: number;
   title: string;
   startDate: string;
   endDate: string;
@@ -108,9 +109,14 @@ export async function createPlanPhase(data: {
   const id = crypto.randomUUID();
   await db.insert(planPhases).values({
     id,
-    ...data,
-    status: 'pending',
-    isMilestone: data.isMilestone ? 1 : 0
+    planId: data.planId,
+    orderIndex: data.orderIndex,
+    title: data.title,
+    startDate: data.startDate,
+    endDate: data.endDate,
+    isMilestone: data.isMilestone ?? false,
+    milestoneTitle: data.milestoneTitle,
+    description: data.description,
   });
   return id;
 }
@@ -128,10 +134,29 @@ export async function createPlanTask(data: {
   preferredTimeStart?: string;
   preferredTimeEnd?: string;
 }) {
+  const [phase] = await db
+    .select({ planId: planPhases.planId })
+    .from(planPhases)
+    .where(eq(planPhases.id, data.phaseId));
+  if (!phase) {
+    throw new Error(`Phase ${data.phaseId} not found — cannot create plan task`);
+  }
+
   const id = crypto.randomUUID();
   await db.insert(planTasks).values({
     id,
-    ...data
+    planId: phase.planId,
+    phaseId: data.phaseId,
+    title: data.title,
+    description: data.description,
+    estimatedMinutes: data.estimatedMinutes ?? 60,
+    difficulty: data.difficulty ?? "medium",
+    repeatPattern: data.repeatPattern ?? "once",
+    repeatDays: data.repeatDays,
+    repeatCount: data.repeatCount,
+    startOffsetDays: data.startOffsetDays ?? 0,
+    preferredTimeStart: data.preferredTimeStart,
+    preferredTimeEnd: data.preferredTimeEnd,
   });
   return id;
 }
