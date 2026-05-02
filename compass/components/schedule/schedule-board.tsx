@@ -45,7 +45,6 @@ function groupItems(items: ScheduleCardItem[]): Record<GroupKey, ScheduleCardIte
         groups.ended_waiting.push(item);
         break;
       case "upcoming":
-      case "no_time":
         groups.today_upcoming.push(item);
         break;
       case "future":
