@@ -4,13 +4,14 @@ import { type ScheduleCardItem } from "@/components/schedule/schedule-card";
 import { TodayFocusPanel, type TodayStats } from "@/components/schedule/today-focus-panel";
 import { createScheduleAction } from "@/lib/actions/schedule";
 import { getSchedulePhase } from "@/lib/schedule/phase";
+import { localDateString } from "@/lib/datetime";
 import { db } from "@/lib/db/client";
 import { scheduleItems } from "@/lib/db/schema";
 
 export const dynamic = "force-dynamic";
 
 export default async function SchedulePage() {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateString();
   const now = new Date();
 
   const list = await db
@@ -44,6 +45,8 @@ export default async function SchedulePage() {
       delayReason: row.delayReason,
       skipReason: row.skipReason,
       cancelReason: row.cancelReason,
+      missReason: row.missReason,
+      rescheduleReason: row.rescheduleReason,
       phase: getSchedulePhase(phaseItem, now),
     };
   });

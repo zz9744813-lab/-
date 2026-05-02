@@ -29,11 +29,15 @@ Available action types:
 
 - create_goal — long-running objective
   fields: title (req), description, dimension (e.g. 学习/健康/工作),
-          targetDate (YYYY-MM-DD), status (active|completed|paused)
+          targetDate (YYYY-MM-DD). Status defaults to active.
+  Goal progress is evidence-driven from completed schedule items.
+  Do NOT set progress or status=completed in create_goal.
 
 - update_goal — modify an existing goal
-  fields: id (req), and any of: title, description, dimension, status,
-          targetDate, progress (0-100)
+  fields: id (req), and any of: title, description, dimension, targetDate.
+  Progress is computed from evidence and cannot be set directly.
+  Status can only be changed to active/paused.
+  To mark a goal complete, the user must confirm via the UI.
 
 - create_journal_entry — diary/reflection text
   fields: content (req), title, date (YYYY-MM-DD, defaults to today),
@@ -48,8 +52,10 @@ Available action types:
 
 - update_schedule_item / cancel_schedule_item
   fields: id (req) + any updatable field.
-  When the user reports a task is finished, update status to "done" and include:
-  completionNote (what happened), reviewScore (0-100), reviewJson (dimension scores).
+  Schedule is time-driven: tasks auto-enter active at startTime.
+  When the user reports a task is finished, mark status "done" and include:
+  completionNote (what happened), reviewScore (0-100).
+  Do NOT use delayed/skipped statuses. Use reschedule or missed feedback instead.
 
 - create_capture — quick inbox item the user wants to triage later
   fields: rawText (req), dimension

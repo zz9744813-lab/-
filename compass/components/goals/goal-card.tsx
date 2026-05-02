@@ -42,6 +42,8 @@ type ActionConfig = {
   icon: React.ReactNode;
   tone: "primary" | "ok" | "warn" | "danger" | "muted";
   onClick: () => void;
+  disabled?: boolean;
+  tooltip?: string;
 };
 
 export function GoalCard({
@@ -72,14 +74,14 @@ export function GoalCard({
     case "active":
       actions.push({ label: "暂停", icon: <Pause size={13} />, tone: "warn", onClick: onPause });
       actions.push({ label: "确认完成", icon: <CheckCircle2 size={13} />, tone: "ok", onClick: onComplete });
-      actions.push({ label: "Hermes 拆解", icon: <Sparkles size={13} />, tone: "primary", onClick: onHermesBreakdown });
+      actions.push({ label: "Hermes 拆解", icon: <Sparkles size={13} />, tone: "primary", onClick: onHermesBreakdown, disabled: true, tooltip: "即将支持" });
       break;
     case "paused":
       actions.push({ label: "恢复", icon: <Play size={13} />, tone: "primary", onClick: onResume });
       actions.push({ label: "归档", icon: <Archive size={13} />, tone: "muted", onClick: onArchive });
       break;
     case "completed":
-      actions.push({ label: "查看总结", icon: <History size={13} />, tone: "muted", onClick: onViewEvents });
+      actions.push({ label: "查看记录", icon: <History size={13} />, tone: "muted", onClick: onViewEvents });
       actions.push({ label: "重新打开", icon: <RotateCcw size={13} />, tone: "primary", onClick: onReopen });
       break;
     case "archived":
@@ -150,10 +152,13 @@ export function GoalCard({
             <button
               key={a.label}
               onClick={a.onClick}
-              className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition ${toneBtn[a.tone]}`}
+              disabled={a.disabled}
+              title={a.tooltip}
+              className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition ${toneBtn[a.tone]} ${a.disabled ? "opacity-40 cursor-not-allowed" : ""}`}
             >
               {a.icon}
               {a.label}
+              {a.disabled && <span className="text-[9px] opacity-60">·</span>}
             </button>
           ))}
         </div>

@@ -1,5 +1,5 @@
 import { db } from "@/lib/db/client";
-import { scheduleItems } from "@/lib/db/schema";
+import { scheduleItems, scheduleEvents } from "@/lib/db/schema";
 import type { McpTool } from "@/lib/mcp/tools/types";
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -25,7 +25,7 @@ function optionalTime(value: unknown, label: string): string | null {
 export const createScheduleItemTool: McpTool = {
   name: "compass.create_schedule_item",
   description:
-    "Create a new schedule item from Hermes reasoning. Compass only persists; Hermes decides when and why.",
+    "Create a new schedule item from Hermes reasoning. Schedule is time-driven; tasks auto-enter active at startTime.",
   async execute(params) {
     const title = String(params.title ?? "").trim();
     if (!title) throw new Error("title is required");
@@ -65,6 +65,16 @@ export const createScheduleItemTool: McpTool = {
       })
       .returning({ id: scheduleItems.id });
 
-    return { ok: true, id: inserted[0]?.id };
+    const itemId = inserted[0]?.id;
+    if (itemId) {
+      await db.insert(scheduleEvents).values({
+        scheduleItemId: itemId,
+        type: "created",
+        toStatus: "planned",
+        note: "Created via Hermes",
+      });
+    }
+
+    return { ok: true, id: itemId };
   },
 };

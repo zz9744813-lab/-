@@ -8,18 +8,18 @@ import { getBrainStatus, probeBridgeHealth } from "@/lib/brain/client";
 import { loadBrainConfigFromStore } from "@/lib/brain/settings-store";
 import { db } from "@/lib/db/client";
 import { captures, goals, hermesMessages, journalEntries, scheduleItems } from "@/lib/db/schema";
-import { formatDateTime } from "@/lib/datetime";
+import { formatDateTime, localDateString } from "@/lib/datetime";
 
 export const dynamic = "force-dynamic";
 
 function startOfWeekDateString() {
   const now = new Date();
-  const day = now.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
+  // Use local timezone for day calculation
+  const localDay = Number(now.toLocaleDateString("en-US", { timeZone: "Asia/Shanghai", weekday: "numeric" }));
+  const diff = localDay === 0 ? -6 : 1 - localDay;
   const monday = new Date(now);
   monday.setDate(now.getDate() + diff);
-  monday.setHours(0, 0, 0, 0);
-  return monday.toISOString().slice(0, 10);
+  return monday.toLocaleDateString("sv-SE", { timeZone: "Asia/Shanghai" });
 }
 
 function toBrainMessageView(row: typeof hermesMessages.$inferSelect): BrainChatMessageView {
@@ -43,7 +43,7 @@ type DashboardCard = {
 };
 
 export default async function DashboardPage() {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateString();
   const weekStart = startOfWeekDateString();
 
   const [activeGoalsResult, todayScheduleResult, todayDoneResult, inboxResult, weeklyJournalResult] =

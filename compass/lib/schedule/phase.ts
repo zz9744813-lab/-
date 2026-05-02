@@ -47,7 +47,8 @@ export function getSchedulePhase(item: SchedulePhaseItem, now: Date = new Date()
   // Old status compatibility: delayed and in_progress are treated as open tasks
   // We compute phase from time, not from these old statuses
 
-  const today = now.toISOString().slice(0, 10);
+  // Use local timezone for "today" calculation
+  const today = now.toLocaleDateString("sv-SE", { timeZone: "Asia/Shanghai" });
 
   // Future date (not today)
   if (item.date > today) return "future";

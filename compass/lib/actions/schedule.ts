@@ -5,7 +5,6 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import { scheduleItems, scheduleEvents } from "@/lib/db/schema";
 
-const STATUSES = new Set(["planned", "in_progress", "done", "delayed", "skipped", "cancelled", "missed"]);
 const PRIORITIES = new Set(["low", "medium", "high"]);
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^\d{2}:\d{2}$/;
@@ -95,7 +94,7 @@ export async function missScheduleItem(
     .update(scheduleItems)
     .set({
       status: "missed",
-      skipReason: payload.reason,
+      missReason: payload.reason,
       reviewScore: payload.reviewScore ?? null,
       updatedAt: new Date(),
     })
@@ -129,6 +128,7 @@ export async function rescheduleScheduleItem(
   const patch: Record<string, unknown> = {
     status: "planned",
     date: payload.newDate,
+    rescheduleReason: payload.reason ?? null,
     updatedAt: new Date(),
   };
   if (payload.newStartTime && TIME_RE.test(payload.newStartTime)) {

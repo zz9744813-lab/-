@@ -78,14 +78,37 @@ async function fetchDetailText(url: string): Promise<string | null> {
   }
 }
 
+function isNavigationNoise(url: string, text: string): boolean {
+  const lowerUrl = url.toLowerCase();
+  const lowerText = text.toLowerCase();
+  const noiseTerms = [
+    "home", "contact", "privacy", "sitemap", "language", "日本語", "english",
+    "access", "login", "log in", "sign up", "register", "faq", "about",
+    "サイトマップ", "プライバシー", "お問い合わせ", "アクセス", "ログイン",
+  ];
+  return noiseTerms.some((t) => lowerUrl.includes(t) || lowerText === t || lowerText.length <= 2);
+}
+
+function isRelevantLink(url: string, text: string): boolean {
+  const lowerUrl = url.toLowerCase();
+  const lowerText = text.toLowerCase();
+  const relevantTerms = [
+    "news", "notice", "topic", "recruit", "career", "job", "採用",
+    "press", "release", "update", "announce", "information",
+    "ニュース", "お知らせ", "トピック", "採用", "求人", "募集",
+  ];
+  return relevantTerms.some((t) => lowerUrl.includes(t) || lowerText.includes(t));
+}
+
 function extractLinks(html: string, baseUrl: string): { title: string; url: string }[] {
   const links: { title: string; url: string }[] = [];
+  const seen = new Set<string>();
   const regex = /<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
   let match;
   while ((match = regex.exec(html)) !== null) {
     const href = match[1].trim();
     const text = match[2].replace(/<[^>]+>/g, "").trim();
-    if (!text || !href || href === "#" || href.startsWith("javascript:")) continue;
+    if (!text || !href || href === "#" || href.startsWith("javascript:") || text.length <= 1) continue;
 
     let fullUrl: string;
     try {
@@ -94,9 +117,20 @@ function extractLinks(html: string, baseUrl: string): { title: string; url: stri
       continue;
     }
 
+    // Skip navigation noise unless it's also relevant
+    if (isNavigationNoise(fullUrl, text) && !isRelevantLink(fullUrl, text)) continue;
+
+    // Dedupe by URL
+    if (seen.has(fullUrl)) continue;
+    seen.add(fullUrl);
+
     links.push({ title: text, url: fullUrl });
   }
-  return links;
+
+  // Prefer relevant links first, then the rest
+  const relevant = links.filter((l) => isRelevantLink(l.url, l.title));
+  const others = links.filter((l) => !isRelevantLink(l.url, l.title));
+  return [...relevant, ...others];
 }
 
 function parseRssItems(xml: string): { title: string; url: string; publishedAt: Date | null }[] {
@@ -169,7 +203,7 @@ export async function fetchFromSource(source: FetchableSource): Promise<FetchedI
         category: source.category,
         language: rawText.match(/[　-鿿]/) ? "ja" : "en",
         rawText,
-        contentHash: computeContentHash(source.id, candidate.title, candidate.url, candidate.publishedAt?.toISOString() ?? null),
+        contentHash: computeContentHash(source.id, candidate.title, candidate.url, candidate.publishedAt?.toISOString() ?? null, rawText),
         impactLevel: classification.impactLevel,
         isMajorUpdate: classification.isMajorUpdate,
       });

@@ -10,32 +10,39 @@ type EmailPayload = {
 };
 
 function markdownToBasicHtml(md: string): string {
+  // Escape HTML entities
   let html = md
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 
-  // Headers
-  html = html.replace(/^### (.+)$/gm, "<h3>$1</h3>");
-  html = html.replace(/^## (.+)$/gm, "<h2>$1</h2>");
-  html = html.replace(/^# (.+)$/gm, "<h1>$1</h1>");
+  // Split into blocks (headers and paragraphs)
+  const blocks = html.split(/\n\n+/);
+  const rendered = blocks.map((block) => {
+    const trimmed = block.trim();
+    if (!trimmed) return "";
 
-  // Bold
+    // Headers
+    if (trimmed.startsWith("### ")) return `<h3 style="color:#f97316">${trimmed.slice(4)}</h3>`;
+    if (trimmed.startsWith("## ")) return `<h2 style="color:#f97316">${trimmed.slice(3)}</h2>`;
+    if (trimmed.startsWith("# ")) return `<h1 style="color:#f97316">${trimmed.slice(2)}</h1>`;
+
+    // Unordered list items
+    if (trimmed.startsWith("- ")) {
+      const items = trimmed.split("\n").filter((l) => l.startsWith("- "));
+      return `<ul>${items.map((li) => `<li>${li.slice(2)}</li>`).join("")}</ul>`;
+    }
+
+    // Regular paragraph
+    return `<p>${trimmed.replace(/\n/g, "<br>")}</p>`;
+  });
+
+  html = rendered.filter(Boolean).join("\n");
+
+  // Inline formatting (after block-level processing)
   html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
-
-  // Links
-  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
-
-  // Bare URLs
-  html = html.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1">$1</a>');
-
-  // Lists
-  html = html.replace(/^- (.+)$/gm, "<li>$1</li>");
-  html = html.replace(/(<li>.*<\/li>\n?)+/g, "<ul>$&</ul>");
-
-  // Paragraphs
-  html = html.replace(/\n\n/g, "</p><p>");
-  html = `<p>${html}</p>`;
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" style="color:#f97316">$1</a>');
+  html = html.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" style="color:#f97316">$1</a>');
 
   return html;
 }

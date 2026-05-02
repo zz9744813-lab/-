@@ -411,7 +411,11 @@ function IntelItemCard({ item }: { item: IntelItem }) {
             <ExternalLink size={11} />
             原文
           </a>
-          <button className="inline-flex items-center gap-1 rounded-lg border border-accent/30 bg-accent/10 px-2 py-1 text-[11px] text-accent hover:bg-accent/20 transition">
+          <button
+            disabled
+            title="即将支持"
+            className="inline-flex items-center gap-1 rounded-lg border border-accent/30 bg-accent/10 px-2 py-1 text-[11px] text-accent opacity-40 cursor-not-allowed"
+          >
             <Target size={11} />
             转目标
           </button>

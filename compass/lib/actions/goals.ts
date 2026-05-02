@@ -54,7 +54,7 @@ export async function completeGoal(id: string, payload: { finalNote: string; fin
   const fromStatus = goal.status;
   await db
     .update(goals)
-    .set({ status: "completed", progress: 100, updatedAt: new Date() })
+    .set({ status: "completed", updatedAt: new Date() })
     .where(eq(goals.id, id));
 
   await logGoalEvent(id, "completed", {
@@ -72,7 +72,7 @@ export async function reopenGoal(id: string, reason?: string) {
   if (!goal || goal.status === "active") return;
 
   const fromStatus = goal.status;
-  await db.update(goals).set({ status: "active", progress: 0, updatedAt: new Date() }).where(eq(goals.id, id));
+  await db.update(goals).set({ status: "active", updatedAt: new Date() }).where(eq(goals.id, id));
   await logGoalEvent(id, "reopened", { fromStatus, toStatus: "active", reason });
   revalidatePath("/goals");
   revalidatePath("/dashboard");

@@ -36,8 +36,18 @@ async function testConnection(formData: FormData) {
     hermesBridgeToken: String(formData.get("hermesBridgeToken") ?? ""),
   };
 
-  const result = await sendBrainMessage("连接测试，请回复“连接成功”。", { from: "settings-test" }, config);
-  await saveBrainTestResult(result.ok ? `测试成功：${result.response}` : `测试失败：${result.error ?? "未知错误"}`);
+  const health = await probeBridgeHealth(config);
+  if (!health.reachable) {
+    await saveBrainTestResult(`Bridge 不可达：${health.reason}`);
+    revalidatePath("/settings");
+    return;
+  }
+
+  const chatResult = await sendBrainMessage("连接测试，请回复“连接成功”。", { from: "settings-test" }, config);
+  const summary = chatResult.ok
+    ? `Bridge 已连接（${health.latencyMs}ms）· Chat 可用：${chatResult.response.slice(0, 80)}`
+    : `Bridge 已连接（${health.latencyMs}ms）· Chat 失败：${chatResult.error ?? "未知错误"}`;
+  await saveBrainTestResult(summary);
   revalidatePath("/settings");
 }
 

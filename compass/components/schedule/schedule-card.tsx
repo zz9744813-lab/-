@@ -30,6 +30,8 @@ export type ScheduleCardItem = {
   delayReason: string | null;
   skipReason: string | null;
   cancelReason: string | null;
+  missReason: string | null;
+  rescheduleReason: string | null;
   phase: SchedulePhase;
 };
 
@@ -155,7 +157,7 @@ export function ScheduleCard({
         </div>
 
         {/* Expandable details */}
-        {(item.description || item.completionNote || item.delayReason || item.skipReason || item.cancelReason) && (
+        {(item.description || item.completionNote || item.delayReason || item.skipReason || item.cancelReason || item.missReason || item.rescheduleReason) && (
           <button
             onClick={() => setExpanded(!expanded)}
             className="mt-3 flex items-center gap-1 text-[11px] text-text-tertiary hover:text-text-secondary transition"
@@ -173,8 +175,11 @@ export function ScheduleCard({
             {item.completionNote && (
               <div><span className="text-text-tertiary">完成反馈：</span>{item.completionNote}</div>
             )}
-            {(item.delayReason || item.skipReason) && (
-              <div><span className="text-text-tertiary">原因：</span>{item.delayReason || item.skipReason}</div>
+            {(item.missReason || item.skipReason) && (
+              <div><span className="text-text-tertiary">未完成原因：</span>{item.missReason || item.skipReason}</div>
+            )}
+            {(item.rescheduleReason || item.delayReason) && (
+              <div><span className="text-text-tertiary">重新安排原因：</span>{item.rescheduleReason || item.delayReason}</div>
             )}
             {item.cancelReason && (
               <div><span className="text-text-tertiary">取消原因：</span>{item.cancelReason}</div>

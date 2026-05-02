@@ -52,21 +52,59 @@ function matchesGoalKeywords(text: string, keywords: string[]): boolean {
   return keywords.some((kw) => lower.includes(kw.toLowerCase()));
 }
 
+function extractKeywords(text: string): string[] {
+  const keywords: string[] = [];
+
+  // Extract alphanumeric terms (N2, JLPT, etc.)
+  const alphanum = text.match(/[A-Za-z]\w+/g);
+  if (alphanum) keywords.push(...alphanum.map((w) => w.toLowerCase()));
+
+  // Extract Chinese segments (2+ chars)
+  const chinese = text.match(/[一-鿿]{2,}/g);
+  if (chinese) keywords.push(...chinese);
+
+  // Extract numbers with units (5万, 50000)
+  const numbers = text.match(/\d+(?:\.\d+)?(?:万|千)?/g);
+  if (numbers) keywords.push(...numbers);
+
+  return [...new Set(keywords)];
+}
+
+// Synonym groups for matching
+const STUDY_SYNONYMS = ["日语", "日文", "japanese", "jlpt", "n1", "n2", "n3", "n4", "n5", "eju", "备考", "复习", "学习"];
+const FINANCE_SYNONYMS = ["启动金", "日币", "日元", "存钱", "储蓄", "攒钱", "存款", "基金", "yen"];
+
+function hasSynonymOverlap(goalKeywords: string[], itemText: string): boolean {
+  const lower = itemText.toLowerCase();
+
+  // Check if goal has study-related keywords and item also has them
+  const goalStudy = goalKeywords.some((k) => STUDY_SYNONYMS.includes(k));
+  const itemStudy = STUDY_SYNONYMS.some((s) => lower.includes(s));
+  if (goalStudy && itemStudy) return true;
+
+  // Check if goal has finance-related keywords and item also has them
+  const goalFinance = goalKeywords.some((k) => FINANCE_SYNONYMS.includes(k));
+  const itemFinance = FINANCE_SYNONYMS.some((s) => lower.includes(s));
+  if (goalFinance && itemFinance) return true;
+
+  return false;
+}
+
 function isRelatedToGoal(
   item: { title: string; description: string | null; evidence: string | null },
   goalTitle: string,
   goalDescription: string | null,
 ): boolean {
-  // Extract key words from goal title (2+ char segments)
-  const goalWords = goalTitle
-    .split(/[\s,，、/／·\-]+/)
-    .filter((w) => w.length >= 2)
-    .map((w) => w.toLowerCase());
-
+  const goalKeywords = extractKeywords(goalTitle);
   const itemText = `${item.title} ${item.description ?? ""} ${item.evidence ?? ""}`.toLowerCase();
 
-  // Check if any goal keyword appears in item
-  return goalWords.some((w) => itemText.includes(w));
+  // Direct keyword match
+  if (goalKeywords.some((w) => itemText.includes(w.toLowerCase()))) return true;
+
+  // Synonym-based match
+  if (hasSynonymOverlap(goalKeywords, itemText)) return true;
+
+  return false;
 }
 
 export function computeGoalProgress(
@@ -85,14 +123,17 @@ export function computeGoalProgress(
       const sorted = [...evidence.financeSnapshots].sort((a, b) => b.date.localeCompare(a.date));
       if (sorted.length > 0) {
         const latest = sorted[0];
-        const currentAmount = latest.cash + latest.netWorth;
+        // Use cash for savings/启动金 goals, netWorth for net worth goals
+        const isSavingsGoal = FINANCE_KEYWORDS.some((kw) => goalText.includes(kw) && ["存钱", "储蓄", "攒钱", "启动金", "日币"].some((s) => goalText.includes(s)));
+        const currentAmount = isSavingsGoal ? latest.cash : latest.netWorth;
         const progress = Math.min(100, Math.round((currentAmount / targetAmount) * 100));
+        const口径 = isSavingsGoal ? "现金/储蓄" : "净资产";
         return {
           computedProgress: progress,
           evidenceCount: 1,
           doneScheduleCount: 0,
           totalScheduleCount: 0,
-          sourceLabel: `基于财务快照 ${latest.date}，当前 ${Math.round(currentAmount)} / 目标 ${targetAmount}`,
+          sourceLabel: `基于财务快照 ${latest.date}（${口径}），当前 ${Math.round(currentAmount)} / 目标 ${targetAmount}`,
           warnings,
         };
       }

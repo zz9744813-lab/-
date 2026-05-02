@@ -72,8 +72,9 @@ export function classifyIntelItem(
   return { impactLevel, isMajorUpdate, matchedKeywords };
 }
 
-export function computeContentHash(sourceId: string, title: string, url: string, publishedAt: string | null): string {
-  const input = `${sourceId}|${title}|${url}|${publishedAt ?? ""}`;
+export function computeContentHash(sourceId: string, title: string, url: string, publishedAt: string | null, bodyText?: string): string {
+  const bodySample = bodyText ? bodyText.slice(0, 2000) : "";
+  const input = `${sourceId}|${title}|${url}|${publishedAt ?? ""}|${bodySample}`;
   // Simple hash for browser/server compat
   let hash = 0;
   for (let i = 0; i < input.length; i++) {

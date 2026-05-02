@@ -23,7 +23,16 @@ export function coerceDate(value: DateLike): Date | null {
 }
 
 export function todayDateInputValue(): string {
-  return new Date().toISOString().slice(0, 10);
+  return localDateString();
+}
+
+/**
+ * Get today's date string in the user's local timezone (YYYY-MM-DD).
+ * Uses Asia/Shanghai as default since this is a Chinese user's personal system.
+ * This avoids UTC date mismatch issues around midnight.
+ */
+export function localDateString(timeZone = "Asia/Shanghai"): string {
+  return new Date().toLocaleDateString("sv-SE", { timeZone });
 }
 
 export function formatDateInput(value: DateLike): string {
