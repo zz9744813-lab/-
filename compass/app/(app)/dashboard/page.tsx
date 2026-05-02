@@ -14,9 +14,9 @@ export const dynamic = "force-dynamic";
 
 function startOfWeekDateString() {
   const now = new Date();
-  // Use local timezone for day calculation
-  const localDay = Number(now.toLocaleDateString("en-US", { timeZone: "Asia/Shanghai", weekday: "numeric" }));
-  const diff = localDay === 0 ? -6 : 1 - localDay;
+  // Get local day-of-week (0=Sun, 1=Mon, ..., 6=Sat)
+  const day = now.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
   const monday = new Date(now);
   monday.setDate(now.getDate() + diff);
   return monday.toLocaleDateString("sv-SE", { timeZone: "Asia/Shanghai" });
