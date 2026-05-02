@@ -1,5 +1,6 @@
 import { cancelScheduleItemTool } from "@/lib/mcp/tools/cancel-schedule-item";
 import { createCaptureTool } from "@/lib/mcp/tools/create-capture";
+import { proposePlanTool, proposePhaseTool, proposePlanTasksTool } from "@/lib/mcp/tools/plans";
 import { createFinanceTransactionTool } from "@/lib/mcp/tools/create-finance-transaction";
 import { createGoalTool } from "@/lib/mcp/tools/create-goal";
 import { createJournalEntryTool } from "@/lib/mcp/tools/create-journal-entry";
@@ -40,4 +41,7 @@ export const compassTools: McpTool[] = [
   cancelScheduleItemTool,
   saveReviewTool,
   saveInsightTool,
+  proposePlanTool,
+  proposePhaseTool,
+  proposePlanTasksTool,
 ];
