@@ -127,13 +127,13 @@ export function computeGoalProgress(
         const isSavingsGoal = FINANCE_KEYWORDS.some((kw) => goalText.includes(kw) && ["存钱", "储蓄", "攒钱", "启动金", "日币"].some((s) => goalText.includes(s)));
         const currentAmount = isSavingsGoal ? latest.cash : latest.netWorth;
         const progress = Math.min(100, Math.round((currentAmount / targetAmount) * 100));
-        const口径 = isSavingsGoal ? "现金/储蓄" : "净资产";
+        const calcMethod = isSavingsGoal ? "现金/储蓄" : "净资产";
         return {
           computedProgress: progress,
           evidenceCount: 1,
           doneScheduleCount: 0,
           totalScheduleCount: 0,
-          sourceLabel: `基于财务快照 ${latest.date}（${口径}），当前 ${Math.round(currentAmount)} / 目标 ${targetAmount}`,
+          sourceLabel: `基于财务快照 ${latest.date}（${calcMethod}），当前 ${Math.round(currentAmount)} / 目标 ${targetAmount}`,
           warnings,
         };
       }
