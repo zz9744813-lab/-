@@ -18,6 +18,9 @@ export type BrainChatCompassAction = {
   ok: boolean;
   result?: unknown;
   error?: string;
+  needsInput?: boolean;
+  missing?: string[];
+  ask?: string;
 };
 
 export type BrainChatMessageView = {
@@ -87,9 +90,10 @@ function fileToAttachment(file: File): BrainChatAttachmentView {
 
 function CompassActionsSummary({ actions }: { actions: BrainChatCompassAction[] }) {
   if (!actions || actions.length === 0) return null;
-  const ok = actions.filter((a) => a.ok);
-  const failed = actions.filter((a) => !a.ok);
-  if (ok.length === 0 && failed.length === 0) return null;
+  const ok = actions.filter((a) => a.ok && !a.needsInput);
+  const failed = actions.filter((a) => !a.ok && !a.needsInput);
+  const needsInput = actions.filter((a) => a.needsInput);
+  if (ok.length === 0 && failed.length === 0 && needsInput.length === 0) return null;
 
   const labels: Record<string, string> = {
     create_goal: "目标",
@@ -99,6 +103,9 @@ function CompassActionsSummary({ actions }: { actions: BrainChatCompassAction[] 
     create_capture: "收件箱",
     save_review: "复盘记忆",
     save_insight: "洞察",
+    propose_plan: "规划草案",
+    propose_phase: "计划阶段",
+    propose_plan_tasks: "计划任务"
   };
 
   const counts = new Map<string, number>();
@@ -109,9 +116,24 @@ function CompassActionsSummary({ actions }: { actions: BrainChatCompassAction[] 
   const summary = Array.from(counts.entries()).map(([label, count]) => `${label} × ${count}`).join("、");
 
   return (
-    <div className="mt-2 rounded-md border border-emerald-400/20 bg-emerald-500/5 px-3 py-2 text-xs text-emerald-200">
-      {summary && <span>已写入：{summary}</span>}
-      {failed.length > 0 && <span className="text-red-300 ml-2">失败 {failed.length} 项</span>}
+    <div className="mt-2 space-y-2">
+      {(summary || failed.length > 0) && (
+        <div className="rounded-md border border-emerald-400/20 bg-emerald-500/5 px-3 py-2 text-xs text-emerald-200">
+          {summary && <span>已写入：{summary}</span>}
+          {failed.length > 0 && <span className="text-red-300 ml-2">失败 {failed.length} 项</span>}
+        </div>
+      )}
+      {needsInput.map((a, i) => (
+        <div key={i} className="rounded-md border border-amber-400/30 bg-amber-500/10 px-3 py-3 text-sm">
+          <p className="text-amber-200 font-medium flex items-center gap-2">
+            <AlertTriangle size={14} /> 需要补充信息 ({labels[a.type] ?? a.type})
+          </p>
+          <p className="text-amber-100/80 mt-1">{a.ask}</p>
+          {a.missing && a.missing.length > 0 && (
+            <p className="text-xs text-amber-300/50 mt-2">缺少字段: {a.missing.join(', ')}</p>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
@@ -318,55 +340,80 @@ export function BrainChatPanel({
 
     try {
       const response = await fetch("/api/brain/chat", { method: "POST", body: formData });
-      const payload = (await response.json().catch(() => ({}))) as {
-        ok?: boolean;
-        error?: string;
-        userMessage?: BrainChatMessageView;
-        assistantMessage?: BrainChatMessageView;
-        compassActions?: BrainChatCompassAction[];
-      };
+      if (!response.ok) throw new Error(`请求失败：HTTP ${response.status}`);
+      if (!response.body) throw new Error("服务器没有返回流");
 
-      if (!response.ok || !payload.ok || !payload.assistantMessage) {
-        throw new Error(payload.error ?? `请求失败：HTTP ${response.status}`);
-      }
+      const newAssistantMsg: BrainChatMessageView = {
+        id: `assistant-${Date.now()}`,
+        role: "assistant",
+        content: "",
+        createdAt: nowLabel(),
+        compassActions: []
+      };
 
       setMessages((current) => {
         const withoutLocal = current.filter((item) => item.id !== localUser.id);
-        const next = payload.userMessage ? [...withoutLocal, payload.userMessage] : withoutLocal;
-        const am = payload.assistantMessage!;
-        const assistantMsg: BrainChatMessageView = {
-          id: am.id,
-          role: am.role,
-          content: am.content,
-          createdAt: am.createdAt,
-          attachments: am.attachments ?? [],
-          compassActions: payload.compassActions ?? am.compassActions ?? [],
-        };
-        return [...next, assistantMsg];
+        return [...withoutLocal, localUser, newAssistantMsg];
       });
-      void loadMessages();
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let done = false;
+      let buffer = "";
+
+      while (!done) {
+        const { value, done: doneReading } = await reader.read();
+        done = doneReading;
+        if (value) {
+          buffer += decoder.decode(value, { stream: true });
+          const parts = buffer.split("\\n\\n");
+          buffer = parts.pop() || "";
+
+          for (const part of parts) {
+            if (part.startsWith("data: ")) {
+              const dataStr = part.slice(6);
+              try {
+                const event = JSON.parse(dataStr);
+                setMessages((curr) => {
+                  const last = curr[curr.length - 1];
+                  if (last.id !== newAssistantMsg.id) return curr;
+
+                  const updated = { ...last };
+
+                  if (event.type === 'text') {
+                    updated.content += event.delta;
+                  } else if (event.type === 'action_complete' || event.type === 'needs_input') {
+                    updated.compassActions = [...(updated.compassActions || []), {
+                       type: event.actionType,
+                       ok: event.type === 'action_complete',
+                       result: event.payload || event.draft,
+                       needsInput: event.type === 'needs_input',
+                       missing: event.missing,
+                       ask: event.ask,
+                    }];
+                  } else if (event.type === 'error') {
+                    // handled by catch
+                  }
+
+                  return [...curr.slice(0, -1), updated];
+                });
+              } catch (e) {
+                // ignore partial JSON parse error
+              }
+            }
+          }
+        }
+      }
     } catch (err) {
       const rawError = err instanceof Error ? err.message : "发送失败";
       setError(rawError);
 
-      // Classify error for user-friendly display
-      let shortMessage = rawError;
-      if (rawError.includes("403") || rawError.includes("1010") || rawError.includes("被上游拒绝") || rawError.includes("fallback 模型服务拒绝")) {
-        shortMessage = "fallback 模型服务拒绝请求；当前 Compass 没有成功调用 Hermes 主模型。请查看诊断。";
-      } else if (rawError.includes("超时")) {
-        shortMessage = "Hermes Bridge 请求超时，模型可能正在处理或服务繁忙。";
-      } else if (rawError.includes("无法连接")) {
-        shortMessage = "无法连接 Hermes Bridge，请确认服务已启动。";
-      } else if (rawError.includes("主链路失败")) {
-        shortMessage = rawError;
-      }
-
       setMessages((current) => [
         ...current,
         {
-          id: `local-error-${Date.now()}`,
+          id: \`local-error-\${Date.now()}\`,
           role: "assistant",
-          content: shortMessage,
+          content: "发生错误：" + rawError,
           createdAt: nowLabel(),
           bridgeOk: false,
         },
