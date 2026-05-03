@@ -63,6 +63,44 @@ export async function POST(request: Request) {
         ? `${userMessage}\n\n以下是附件内容,请按需调用 compass.* 工具处理:\n${attachmentParts.join("\n\n")}`
         : userMessage;
 
+    // Inject current time so Hermes can anchor relative dates correctly.
+    const compassTimezone = process.env.COMPASS_TIMEZONE ?? "Asia/Shanghai";
+    const now = new Date();
+    const todayCN = now.toLocaleString("zh-CN", {
+      timeZone: compassTimezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      weekday: "long",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    const formatDateInTimezone = (date: Date, offsetDays = 0) => {
+      const parts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: compassTimezone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).formatToParts(date);
+      const getPart = (type: string) => Number(parts.find((part) => part.type === type)?.value);
+      const shifted = new Date(Date.UTC(getPart("year"), getPart("month") - 1, getPart("day") + offsetDays, 12));
+      return new Intl.DateTimeFormat("en-CA", { timeZone: "UTC" }).format(shifted);
+    };
+    const todayISO = formatDateInTimezone(now);
+    const tomorrowISO = formatDateInTimezone(now, 1);
+    const afterTomorrowISO = formatDateInTimezone(now, 2);
+
+    const systemDateHint = [
+      `\u5f53\u524d\u65f6\u95f4:${todayCN}\u3002`,
+      "\u65e5\u671f\u951a\u5b9a\u89c4\u5219(\u4e25\u683c\u9075\u5b88):",
+      `- "\u4eca\u5929" = ${todayISO}`,
+      `- "\u660e\u5929" = ${tomorrowISO}`,
+      `- "\u540e\u5929" = ${afterTomorrowISO}`,
+      '- "\u4e0b\u5468X" = \u4e0b\u4e00\u4e2a\u5468X\u7684\u5177\u4f53\u65e5\u671f',
+      '- \u7528\u6237\u6ca1\u660e\u8bf4\u65e5\u671f\u65f6:**\u53cd\u95ee\u7528\u6237**,\u4e0d\u8981\u9ed8\u8ba4\u586b\u4eca\u5929\u6216\u660e\u5929',
+      "\u4e0d\u8981\u4f7f\u7528\u4efb\u4f55\u5176\u4ed6\u65e5\u671f\u3002",
+    ].join("\\n");
+
     // Forward to Hermes /v1/chat/completions (stream)
     const hermesResponse = await fetch(`${HERMES_URL}/v1/chat/completions`, {
       method: "POST",
@@ -73,7 +111,10 @@ export async function POST(request: Request) {
       },
       body: JSON.stringify({
         model: HERMES_MODEL,
-        messages: [{ role: "user", content: composedMessage }],
+        messages: [
+          { role: "system", content: systemDateHint },
+          { role: "user", content: composedMessage },
+        ],
         stream: true,
       }),
     });
