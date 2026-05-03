@@ -20,3 +20,15 @@ data/
 
 # Editor
 .DS_Store
+
+# Runtime secrets (do not commit)
+.env.production
+.env.*.local
+
+# Database files
+data/*.db
+data/*.db-*
+data/backup-*
+
+# Build artifacts
+*.log
