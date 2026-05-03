@@ -11,7 +11,6 @@ const ITEMS = [
   ["日记", "/journal"],
   ["知识", "/knowledge"],
   ["财务", "/finance"],
-  ["大脑", "/brain"],
   ["收件箱", "/inbox"],
   ["设置", "/settings"],
 ] as const;
