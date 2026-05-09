@@ -18,6 +18,7 @@ import {
   Menu,
   X,
 } from "lucide-react";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 const NAV_ITEMS: { href: string; label: string; icon: any; feature?: string }[] = [
   { href: "/dashboard", label: "总览", icon: House },
@@ -39,10 +40,7 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const visibleItems = NAV_ITEMS.filter((item) => {
-    if (!item.feature) return true;
-    return process.env[item.feature] === "true";
-  });
+  const visibleItems = NAV_ITEMS;
 
   const navContent = (
     <div className="h-full flex flex-col py-5 px-3">
@@ -116,21 +114,24 @@ export function Sidebar() {
         })}
 
         {/* Collapse toggle — desktop only */}
-        <button
-          onClick={() => setCollapsed(!collapsed)}
-          className={`hidden lg:flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm w-full transition-all duration-200 text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] ${
-            collapsed ? "justify-center" : ""
-          }`}
-        >
-          {collapsed ? (
-            <ChevronRight size={18} strokeWidth={1.5} />
-          ) : (
-            <>
-              <ChevronLeft size={18} strokeWidth={1.5} />
-              <span>收起</span>
-            </>
-          )}
-        </button>
+        <div className={`flex items-center gap-2 ${collapsed ? "justify-center" : ""}`}>
+          <ThemeToggle />
+          <button
+            onClick={() => setCollapsed(!collapsed)}
+            className={`hidden lg:flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm flex-1 transition-all duration-200 text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] ${
+              collapsed ? "justify-center" : ""
+            }`}
+          >
+            {collapsed ? (
+              <ChevronRight size={18} strokeWidth={1.5} />
+            ) : (
+              <>
+                <ChevronLeft size={18} strokeWidth={1.5} />
+                <span>收起</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Shortcut hint — desktop only */}
