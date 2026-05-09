@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 
 type Mood = "idle" | "happy" | "cheer" | "wink" | "blush";
 
@@ -13,19 +13,122 @@ const MOOD_CONFIG: Record<Mood, { emoji: string; text: string; duration: number 
 };
 
 /**
- * 娜美风格像素美女 — 橘发大眼 + 性感身材
- * 多邻国式可交互吉祥物
+ * 娜美风像素美女 — 可自主移动 + 可拖拽
+ * 放置在页面固定位置，会自己走来走去，也可以被用户拖动
  */
-export function PixelCharacter({ className = "" }: { className?: string }) {
+export function PixelCharacter() {
   const [mood, setMood] = useState<Mood>("idle");
   const [clickCount, setClickCount] = useState(0);
+  const [pos, setPos] = useState({ x: 80, y: 70 }); // percentage-based
+  const [direction, setDirection] = useState<"left" | "right">("right");
+  const [isWalking, setIsWalking] = useState(true);
+  const [isDragging, setIsDragging] = useState(false);
+  const [walkFrame, setWalkFrame] = useState(0);
+  const dragOffset = useRef({ x: 0, y: 0 });
+  const containerRef = useRef<HTMLDivElement>(null);
+  const walkTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const moveTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const triggerMood = useCallback((newMood: Mood) => {
     setMood(newMood);
     setTimeout(() => setMood("idle"), MOOD_CONFIG[newMood].duration);
   }, []);
 
+  // 自主移动逻辑
+  useEffect(() => {
+    const startWalking = () => {
+      if (isDragging) return;
+
+      // 随机选择目标位置
+      const targetX = Math.random() * 70 + 15; // 15% ~ 85%
+      const targetY = Math.random() * 50 + 40; // 40% ~ 90%
+      const dx = targetX - pos.x;
+
+      setDirection(dx > 0 ? "right" : "left");
+      setIsWalking(true);
+
+      let currentX = pos.x;
+      let currentY = pos.y;
+      const stepX = dx / 60;
+      const stepY = (targetY - pos.y) / 60;
+      let steps = 0;
+
+      moveTimer.current = setInterval(() => {
+        if (isDragging) {
+          if (moveTimer.current) clearInterval(moveTimer.current);
+          return;
+        }
+        steps++;
+        currentX += stepX;
+        currentY += stepY;
+        setPos({ x: currentX, y: currentY });
+
+        if (steps >= 60) {
+          if (moveTimer.current) clearInterval(moveTimer.current);
+          setIsWalking(false);
+          // 停一会再走
+          setTimeout(startWalking, Math.random() * 4000 + 2000);
+        }
+      }, 50);
+    };
+
+    const initialDelay = setTimeout(startWalking, 2000);
+
+    return () => {
+      clearTimeout(initialDelay);
+      if (moveTimer.current) clearInterval(moveTimer.current);
+    };
+  }, [isDragging]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 走路帧动画
+  useEffect(() => {
+    walkTimer.current = setInterval(() => {
+      setWalkFrame((f) => (f + 1) % 4);
+    }, 200);
+    return () => {
+      if (walkTimer.current) clearInterval(walkTimer.current);
+    };
+  }, []);
+
+  // 拖拽处理
+  const handlePointerDown = (e: React.PointerEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+    setIsWalking(false);
+    if (moveTimer.current) clearInterval(moveTimer.current);
+
+    const rect = containerRef.current?.parentElement?.getBoundingClientRect();
+    if (!rect) return;
+
+    dragOffset.current = {
+      x: e.clientX - (pos.x / 100) * rect.width,
+      y: e.clientY - (pos.y / 100) * rect.height,
+    };
+
+    const handleMove = (ev: PointerEvent) => {
+      const parentRect = containerRef.current?.parentElement?.getBoundingClientRect();
+      if (!parentRect) return;
+      const newX = ((ev.clientX - dragOffset.current.x) / parentRect.width) * 100;
+      const newY = ((ev.clientY - dragOffset.current.y) / parentRect.height) * 100;
+      setPos({
+        x: Math.max(5, Math.min(90, newX)),
+        y: Math.max(10, Math.min(90, newY)),
+      });
+    };
+
+    const handleUp = () => {
+      setIsDragging(false);
+      triggerMood("happy");
+      document.removeEventListener("pointermove", handleMove);
+      document.removeEventListener("pointerup", handleUp);
+    };
+
+    document.addEventListener("pointermove", handleMove);
+    document.addEventListener("pointerup", handleUp);
+  };
+
   const handleClick = () => {
+    if (isDragging) return;
     const count = clickCount + 1;
     setClickCount(count);
     if (count % 5 === 0) {
@@ -38,68 +141,69 @@ export function PixelCharacter({ className = "" }: { className?: string }) {
     }
   };
 
-  const handleMouseEnter = () => {
-    if (mood === "idle") triggerMood("happy");
-  };
-
   const moodInfo = MOOD_CONFIG[mood];
   const isActive = mood !== "idle";
 
-  // 娜美风：大眼、橘色长发、比基尼上衣、牛仔短裤、长腿
+  // 腿部偏移模拟走路
+  const legOffset = isWalking ? [0, 2, 0, -2][walkFrame] : 0;
+
   return (
     <div
-      className={`pixel-mascot group relative select-none ${className}`}
+      ref={containerRef}
+      className="fixed z-50 cursor-grab active:cursor-grabbing select-none"
+      style={{
+        left: `${pos.x}%`,
+        top: `${pos.y}%`,
+        transform: `translate(-50%, -50%) scaleX(${direction === "left" ? -1 : 1})`,
+        transition: isDragging ? "none" : "transform 0.2s",
+      }}
+      onPointerDown={handlePointerDown}
       onClick={handleClick}
-      onMouseEnter={handleMouseEnter}
       role="button"
       tabIndex={0}
-      aria-label="点击互动"
+      aria-label="拖动或点击互动"
     >
       {/* Speech bubble */}
       {isActive && (
-        <div className="absolute -top-10 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 px-2.5 py-1 text-xs text-text-primary animate-bounce-in z-10">
+        <div
+          className="absolute -top-10 left-1/2 whitespace-nowrap rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 px-2.5 py-1 text-xs text-text-primary z-10"
+          style={{ transform: `translateX(-50%) scaleX(${direction === "left" ? -1 : 1})` }}
+        >
           <span className="mr-1">{moodInfo.emoji}</span>
           <span>{moodInfo.text}</span>
-          <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-white/10 border-b border-r border-white/20 rotate-45" />
         </div>
       )}
 
       <svg
         viewBox="0 0 32 56"
-        width="56"
-        height="98"
-        className="transition-transform duration-200 group-hover:scale-110 group-active:scale-95"
+        width="48"
+        height="84"
         style={{ imageRendering: "pixelated" }}
       >
         {/* === HAIR (orange, long, flowing) === */}
         <rect x="9" y="0" width="14" height="3" fill="#FF6B00" />
         <rect x="7" y="2" width="18" height="3" fill="#FF8C00" />
         <rect x="6" y="4" width="20" height="4" fill="#FF6B00" />
-        {/* Side hair flowing down */}
         <rect x="5" y="5" width="3" height="18" fill="#FF8C00" />
         <rect x="24" y="5" width="3" height="18" fill="#FF8C00" />
         <rect x="4" y="10" width="2" height="12" fill="#FF6B00" />
         <rect x="26" y="10" width="2" height="12" fill="#FF6B00" />
-        {/* Hair bangs */}
         <rect x="9" y="5" width="4" height="3" fill="#FF8C00" />
         <rect x="19" y="5" width="4" height="3" fill="#FF8C00" />
 
         {/* === FACE === */}
         <rect x="9" y="7" width="14" height="12" fill="#FFE0BD" />
 
-        {/* Big eyes — anime style */}
+        {/* Eyes */}
         {mood === "wink" ? (
           <>
-            {/* Left eye winking */}
             <rect x="11" y="11" width="4" height="1" fill="#2d1b00" />
-            {/* Right eye open */}
             <rect x="19" y="10" width="4" height="4" fill="#FFFFFF" />
             <rect x="20" y="11" width="2" height="2" fill="#4A2800" />
             <rect x="20" y="11" width="1" height="1" fill="#FFFFFF" />
           </>
         ) : mood === "happy" || mood === "cheer" ? (
           <>
-            {/* Happy closed eyes ^ ^ */}
             <rect x="11" y="12" width="4" height="1" fill="#2d1b00" />
             <rect x="12" y="11" width="2" height="1" fill="#2d1b00" />
             <rect x="19" y="12" width="4" height="1" fill="#2d1b00" />
@@ -107,7 +211,6 @@ export function PixelCharacter({ className = "" }: { className?: string }) {
           </>
         ) : mood === "blush" ? (
           <>
-            {/* Shy eyes */}
             <rect x="11" y="11" width="4" height="2" fill="#4A2800" />
             <rect x="12" y="11" width="1" height="1" fill="#FFFFFF" />
             <rect x="19" y="11" width="4" height="2" fill="#4A2800" />
@@ -115,7 +218,6 @@ export function PixelCharacter({ className = "" }: { className?: string }) {
           </>
         ) : (
           <>
-            {/* Normal big eyes */}
             <rect x="10" y="10" width="5" height="4" fill="#FFFFFF" />
             <rect x="11" y="11" width="3" height="2" fill="#4A2800" />
             <rect x="12" y="11" width="1" height="1" fill="#FFFFFF" />
@@ -125,7 +227,7 @@ export function PixelCharacter({ className = "" }: { className?: string }) {
           </>
         )}
 
-        {/* Blush cheeks */}
+        {/* Blush */}
         {(mood === "blush" || mood === "happy") && (
           <>
             <rect x="9" y="14" width="3" height="2" fill="#FF9999" opacity="0.5" />
@@ -135,77 +237,61 @@ export function PixelCharacter({ className = "" }: { className?: string }) {
 
         {/* Mouth */}
         {mood === "happy" || mood === "cheer" ? (
-          <rect x="14" y="16" width="4" height="2" fill="#FF6B8A" rx="1" />
-        ) : mood === "blush" ? (
-          <>
-            <rect x="14" y="16" width="4" height="1" fill="#FF6B8A" />
-            <rect x="15" y="17" width="2" height="1" fill="#FF6B8A" />
-          </>
+          <rect x="14" y="16" width="4" height="2" fill="#FF6B8A" />
         ) : (
           <rect x="14" y="16" width="4" height="1" fill="#FF6B8A" />
         )}
 
-        {/* === NECK === */}
+        {/* Neck */}
         <rect x="14" y="19" width="4" height="2" fill="#FFE0BD" />
 
-        {/* === BODY — Bikini top (blue striped like Nami) === */}
+        {/* Body — Bikini top */}
         <rect x="10" y="21" width="12" height="5" fill="#FFE0BD" />
         <rect x="11" y="21" width="4" height="4" fill="#2196F3" />
         <rect x="17" y="21" width="4" height="4" fill="#2196F3" />
         <rect x="11" y="22" width="4" height="1" fill="#1565C0" />
         <rect x="17" y="22" width="4" height="1" fill="#1565C0" />
-        {/* Strap */}
         <rect x="14" y="20" width="1" height="2" fill="#2196F3" />
         <rect x="17" y="20" width="1" height="2" fill="#2196F3" />
 
-        {/* === WAIST (slim) === */}
+        {/* Waist */}
         <rect x="12" y="26" width="8" height="3" fill="#FFE0BD" />
-        {/* Navel */}
         <rect x="15" y="27" width="2" height="1" fill="#EDCBA0" />
 
-        {/* === SHORTS (denim) === */}
+        {/* Shorts */}
         <rect x="10" y="29" width="12" height="5" fill="#1565C0" />
-        <rect x="10" y="29" width="12" height="1" fill="#0D47A1" />
-        {/* Belt */}
         <rect x="10" y="29" width="12" height="1" fill="#795548" />
         <rect x="15" y="29" width="2" height="1" fill="#FFD700" />
 
-        {/* === LEGS (long, slim) === */}
-        <rect x="11" y="34" width="4" height="12" fill="#FFE0BD" />
-        <rect x="17" y="34" width="4" height="12" fill="#FFE0BD" />
+        {/* Legs — walking animation */}
+        <rect x={11 + legOffset} y="34" width="4" height="12" fill="#FFE0BD" />
+        <rect x={17 - legOffset} y="34" width="4" height="12" fill="#FFE0BD" />
 
-        {/* === SANDALS === */}
-        <rect x="10" y="46" width="5" height="2" fill="#FF6B00" />
-        <rect x="17" y="46" width="5" height="2" fill="#FF6B00" />
-        <rect x="12" y="45" width="1" height="1" fill="#FF8C00" />
-        <rect x="19" y="45" width="1" height="1" fill="#FF8C00" />
+        {/* Sandals */}
+        <rect x={10 + legOffset} y="46" width="5" height="2" fill="#FF6B00" />
+        <rect x={17 - legOffset} y="46" width="5" height="2" fill="#FF6B00" />
 
-        {/* === ARMS === */}
+        {/* Arms */}
         {mood === "cheer" ? (
           <>
-            {/* Arms raised */}
             <rect x="6" y="16" width="3" height="8" fill="#FFE0BD" />
             <rect x="23" y="16" width="3" height="8" fill="#FFE0BD" />
-            {/* Hands */}
             <rect x="6" y="14" width="3" height="3" fill="#FFE0BD" />
             <rect x="23" y="14" width="3" height="3" fill="#FFE0BD" />
           </>
-        ) : mood === "wink" ? (
+        ) : isWalking ? (
           <>
-            {/* One hand on hip, one waving */}
-            <rect x="7" y="22" width="3" height="7" fill="#FFE0BD" />
-            <rect x="23" y="18" width="3" height="6" fill="#FFE0BD" />
-            <rect x="23" y="16" width="3" height="3" fill="#FFE0BD" />
+            <rect x={7 - legOffset} y="22" width="3" height="9" fill="#FFE0BD" />
+            <rect x={22 + legOffset} y="22" width="3" height="9" fill="#FFE0BD" />
           </>
         ) : (
           <>
-            {/* Relaxed arms */}
             <rect x="7" y="22" width="3" height="9" fill="#FFE0BD" />
             <rect x="22" y="22" width="3" height="9" fill="#FFE0BD" />
           </>
         )}
 
-        {/* Sparkles when active */}
+        {/* Sparkles */}
         {isActive && (
           <>
             <rect x="1" y="3" width="2" height="2" fill="#FFD700" opacity="0.9">
@@ -214,42 +300,22 @@ export function PixelCharacter({ className = "" }: { className?: string }) {
             <rect x="28" y="6" width="2" height="2" fill="#FF69B4" opacity="0.8">
               <animate attributeName="opacity" values="0.2;0.9;0.2" dur="0.8s" repeatCount="indefinite" />
             </rect>
-            <rect x="2" y="40" width="2" height="2" fill="#00BCD4" opacity="0.7">
-              <animate attributeName="opacity" values="0.7;0.1;0.7" dur="1s" repeatCount="indefinite" />
-            </rect>
-            <rect x="29" y="35" width="2" height="2" fill="#FFD700" opacity="0.6">
-              <animate attributeName="opacity" values="0.3;0.8;0.3" dur="0.9s" repeatCount="indefinite" />
-            </rect>
           </>
         )}
       </svg>
 
-      {/* Hover hint */}
-      <p className="text-[10px] text-text-tertiary text-center mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        点我~
-      </p>
-
-      <style jsx>{`
-        .pixel-mascot {
-          cursor: pointer;
-          animation: mascot-float 3s ease-in-out infinite;
-        }
-        .pixel-mascot:active {
-          animation: none;
-        }
-        @keyframes mascot-float {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-4px); }
-        }
-        @keyframes bounce-in {
-          0% { opacity: 0; transform: translate(-50%, 4px) scale(0.8); }
-          50% { transform: translate(-50%, -2px) scale(1.05); }
-          100% { opacity: 1; transform: translate(-50%, 0) scale(1); }
-        }
-        .animate-bounce-in {
-          animation: bounce-in 0.3s ease-out forwards;
-        }
-      `}</style>
+      {/* Walking indicator */}
+      {isWalking && !isDragging && (
+        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 flex gap-0.5">
+          {[0, 1, 2].map((i) => (
+            <div
+              key={i}
+              className="w-1 h-1 rounded-full bg-text-tertiary"
+              style={{ opacity: walkFrame === i ? 0.6 : 0.2 }}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

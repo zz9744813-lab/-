@@ -6,7 +6,6 @@ import { computeGoalProgress } from "@/lib/goals/progress";
 import { db } from "@/lib/db/client";
 import { goals, scheduleItems, financeSnapshots } from "@/lib/db/schema";
 import { formatDateInput, localDateString, formatDateTime } from "@/lib/datetime";
-import { PixelCharacter } from "@/components/ui/pixel-character";
 
 export const dynamic = "force-dynamic";
 
@@ -56,14 +55,11 @@ export default async function GoalsPage() {
 
   return (
     <section className="space-y-6">
-      <div className="animate-fade-rise flex items-center gap-4">
-        <div>
-          <p className="text-sm text-text-secondary">18个月 · 逐月攻克</p>
-          <h1 className="mt-1 text-4xl tracking-tight" style={{ fontFamily: "var(--font-fraunces)" }}>
-            月度目标
-          </h1>
-        </div>
-        <PixelCharacter className="ml-auto" />
+      <div className="animate-fade-rise">
+        <p className="text-sm text-text-secondary">18个月 · 逐月攻克</p>
+        <h1 className="mt-1 text-4xl tracking-tight" style={{ fontFamily: "var(--font-fraunces)" }}>
+          月度目标
+        </h1>
       </div>
 
       <details className="glass animate-fade-rise-delay p-4 [&[open]>summary]:mb-3">

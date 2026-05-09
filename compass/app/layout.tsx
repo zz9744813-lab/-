@@ -3,6 +3,7 @@ import "@/styles/globals.css";
 import { ToastProvider } from "@/components/ui/toast";
 import { ThemeProvider } from "@/components/ui/theme-provider";
 import { PixelBackground } from "@/components/ui/pixel-background";
+import { PixelCharacter } from "@/components/ui/pixel-character";
 
 export const metadata: Metadata = {
   title: "Compass",
@@ -42,6 +43,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body className="antialiased">
         <ThemeProvider>
           <PixelBackground />
+          <PixelCharacter />
           <ToastProvider>{children}</ToastProvider>
         </ThemeProvider>
       </body>

@@ -7,7 +7,6 @@ import { getSchedulePhase } from "@/lib/schedule/phase";
 import { localDateString } from "@/lib/datetime";
 import { db } from "@/lib/db/client";
 import { scheduleItems } from "@/lib/db/schema";
-import { PixelCharacter } from "@/components/ui/pixel-character";
 
 export const dynamic = "force-dynamic";
 
@@ -76,14 +75,11 @@ export default async function SchedulePage() {
 
   return (
     <section className="space-y-6">
-      <div className="animate-fade-rise flex items-center gap-4">
-        <div>
-          <p className="text-sm text-text-secondary">每周执行计划</p>
-          <h1 className="mt-1 text-4xl tracking-tight" style={{ fontFamily: "var(--font-fraunces)" }}>
-            周程
-          </h1>
-        </div>
-        <PixelCharacter className="ml-auto" />
+      <div className="animate-fade-rise">
+        <p className="text-sm text-text-secondary">每周执行计划</p>
+        <h1 className="mt-1 text-4xl tracking-tight" style={{ fontFamily: "var(--font-fraunces)" }}>
+          周程
+        </h1>
       </div>
 
       <div className="animate-fade-rise-delay">
