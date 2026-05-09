@@ -97,7 +97,7 @@ html, body {
   min-height: 100vh;
 }
 
-/* Subtle gradient background */
+/* 海洋航海主题动态背景 */
 body::before {
   content: '';
   position: fixed;
@@ -105,16 +105,35 @@ body::before {
   z-index: 0;
   pointer-events: none;
   background:
-    radial-gradient(ellipse at 15% 10%, rgba(140, 153, 214, 0.08), transparent 50%),
-    radial-gradient(ellipse at 85% 80%, rgba(235, 37, 88, 0.05), transparent 50%),
-    radial-gradient(ellipse at 50% 100%, rgba(75, 177, 72, 0.04), transparent 50%);
+    radial-gradient(ellipse at 20% 15%, rgba(255, 140, 66, 0.07), transparent 45%),
+    radial-gradient(ellipse at 75% 70%, rgba(52, 152, 219, 0.09), transparent 50%),
+    radial-gradient(ellipse at 40% 90%, rgba(46, 204, 113, 0.05), transparent 45%),
+    radial-gradient(ellipse at 90% 20%, rgba(78, 205, 196, 0.04), transparent 40%);
+  animation: ocean-drift 25s ease-in-out infinite;
+}
+
+@keyframes ocean-drift {
+  0%, 100% {
+    background-position: 0% 0%, 100% 100%, 50% 100%, 90% 0%;
+  }
+  25% {
+    background-position: 10% 5%, 90% 90%, 40% 95%, 85% 10%;
+  }
+  50% {
+    background-position: 5% 10%, 80% 80%, 55% 85%, 95% 15%;
+  }
+  75% {
+    background-position: 15% 3%, 95% 95%, 45% 92%, 88% 5%;
+  }
 }
 
 [data-theme="light"] body::before {
   background:
-    radial-gradient(ellipse at 15% 10%, rgba(99, 102, 241, 0.06), transparent 50%),
-    radial-gradient(ellipse at 85% 80%, rgba(217, 26, 74, 0.04), transparent 50%),
-    radial-gradient(ellipse at 50% 100%, rgba(22, 163, 74, 0.03), transparent 50%);
+    radial-gradient(ellipse at 20% 15%, rgba(255, 140, 66, 0.05), transparent 45%),
+    radial-gradient(ellipse at 75% 70%, rgba(37, 99, 235, 0.06), transparent 50%),
+    radial-gradient(ellipse at 40% 90%, rgba(22, 163, 74, 0.04), transparent 45%),
+    radial-gradient(ellipse at 90% 20%, rgba(78, 205, 196, 0.03), transparent 40%);
+  animation: ocean-drift 25s ease-in-out infinite;
 }
 
 body > * {
