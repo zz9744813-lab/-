@@ -2,42 +2,71 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarClock, Goal, House, Inbox, NotebookPen, PiggyBank, Settings, Globe } from "lucide-react";
+import { useState } from "react";
+import {
+  CalendarClock,
+  Goal,
+  House,
+  Inbox,
+  NotebookPen,
+  PiggyBank,
+  Settings,
+  Globe,
+  Repeat,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 
 const NAV_ITEMS: { href: string; label: string; icon: any; feature?: string }[] = [
   { href: "/dashboard", label: "总览", icon: House },
   { href: "/schedule", label: "日程", icon: CalendarClock },
   { href: "/goals", label: "目标", icon: Goal },
+  { href: "/habits", label: "习惯", icon: Repeat },
   { href: "/journal", label: "日记", icon: NotebookPen },
   { href: "/finance", label: "财务", icon: PiggyBank },
   { href: "/inbox", label: "收件箱", icon: Inbox },
-  { href: "/japan", label: "日本情报", icon: Globe, feature: "NEXT_PUBLIC_FEATURE_JAPAN" },
+  { href: "/japan", label: "情报", icon: Globe, feature: "NEXT_PUBLIC_FEATURE_JAPAN" },
+];
+
+const BOTTOM_ITEMS: { href: string; label: string; icon: any }[] = [
   { href: "/settings", label: "设置", icon: Settings },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
+  const [collapsed, setCollapsed] = useState(false);
+
   const visibleItems = NAV_ITEMS.filter((item) => {
     if (!item.feature) return true;
     return process.env[item.feature] === "true";
   });
 
   return (
-    <aside className="w-[240px] p-5 sticky top-0 h-screen">
-      <div className="glass h-full p-5 flex flex-col">
-        <div className="mb-8 flex items-center gap-2 px-1">
+    <aside
+      className={`sticky top-0 h-screen transition-all duration-300 ${
+        collapsed ? "w-[72px]" : "w-[220px]"
+      }`}
+    >
+      <div className="h-full flex flex-col py-5 px-3">
+        {/* Logo */}
+        <div className={`flex items-center mb-8 ${collapsed ? "justify-center" : "px-3"}`}>
           <div
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold"
+            className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-sm font-bold shrink-0"
             style={{
-              background: "linear-gradient(135deg, var(--accent), #FF8855)",
+              background: "linear-gradient(135deg, var(--accent), var(--purple))",
               boxShadow: "0 4px 14px var(--accent-glow)",
             }}
           >
             C
           </div>
-          <span className="text-lg font-semibold tracking-tight">Compass</span>
+          {!collapsed && (
+            <span className="ml-3 text-lg font-semibold tracking-tight text-text-primary">
+              Compass
+            </span>
+          )}
         </div>
 
+        {/* Main nav */}
         <nav className="space-y-1 flex-1">
           {visibleItems.map((item) => {
             const Icon = item.icon;
@@ -46,32 +75,70 @@ export function Sidebar() {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all duration-300 ${
+                title={collapsed ? item.label : undefined}
+                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all duration-200 ${
+                  collapsed ? "justify-center" : ""
+                } ${
                   active
-                    ? "text-text-primary"
-                    : "text-text-secondary hover:text-text-primary hover:bg-white/5"
+                    ? "bg-[var(--accent-muted)] text-[var(--accent)] font-medium"
+                    : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)]"
                 }`}
-                style={
-                  active
-                    ? {
-                        background:
-                          "linear-gradient(135deg, rgba(255,107,53,0.18), rgba(255,107,53,0.06))",
-                        border: "1px solid rgba(255,107,53,0.25)",
-                        boxShadow: "0 0 14px rgba(255,107,53,0.18)",
-                      }
-                    : { border: "1px solid transparent" }
-                }
               >
-                <Icon size={17} strokeWidth={1.6} />
-                {item.label}
+                <Icon size={18} strokeWidth={active ? 2 : 1.5} className="shrink-0" />
+                {!collapsed && <span>{item.label}</span>}
               </Link>
             );
           })}
         </nav>
 
-        <div className="text-[11px] text-text-tertiary px-1 pt-4 border-t border-border-subtle">
-          ⌘K 命令 · C 速记
+        {/* Bottom nav */}
+        <div className="space-y-1 pt-4 border-t border-[var(--border-subtle)]">
+          {BOTTOM_ITEMS.map((item) => {
+            const Icon = item.icon;
+            const active = pathname === item.href;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                title={collapsed ? item.label : undefined}
+                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all duration-200 ${
+                  collapsed ? "justify-center" : ""
+                } ${
+                  active
+                    ? "bg-[var(--accent-muted)] text-[var(--accent)] font-medium"
+                    : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)]"
+                }`}
+              >
+                <Icon size={18} strokeWidth={active ? 2 : 1.5} className="shrink-0" />
+                {!collapsed && <span>{item.label}</span>}
+              </Link>
+            );
+          })}
+
+          {/* Collapse toggle */}
+          <button
+            onClick={() => setCollapsed(!collapsed)}
+            className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm w-full transition-all duration-200 text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] ${
+              collapsed ? "justify-center" : ""
+            }`}
+          >
+            {collapsed ? (
+              <ChevronRight size={18} strokeWidth={1.5} />
+            ) : (
+              <>
+                <ChevronLeft size={18} strokeWidth={1.5} />
+                <span>收起</span>
+              </>
+            )}
+          </button>
         </div>
+
+        {/* Shortcut hint */}
+        {!collapsed && (
+          <div className="text-[11px] text-[var(--text-tertiary)] px-3 pt-3 mt-2">
+            ⌘K 命令 · C 速记
+          </div>
+        )}
       </div>
     </aside>
   );

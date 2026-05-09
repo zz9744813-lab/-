@@ -9,6 +9,7 @@ const config: Config = {
           base: "var(--bg-base)",
           surface: "var(--bg-surface)",
           elevated: "var(--bg-elevated)",
+          card: "var(--bg-card)",
         },
         border: {
           subtle: "var(--border-subtle)",
@@ -24,16 +25,34 @@ const config: Config = {
           DEFAULT: "var(--accent)",
           muted: "var(--accent-muted)",
         },
+        purple: {
+          DEFAULT: "var(--purple)",
+          muted: "var(--purple-muted)",
+        },
+        green: {
+          DEFAULT: "var(--green)",
+          muted: "var(--green-muted)",
+        },
+        blue: {
+          DEFAULT: "var(--blue)",
+          muted: "var(--blue-muted)",
+        },
+        orange: {
+          DEFAULT: "var(--orange)",
+          muted: "var(--orange-muted)",
+        },
       },
       fontFamily: {
-        sans: ['var(--font-geist-sans)'],
-        mono: ['var(--font-geist-mono)'],
-        serif: ['var(--font-fraunces)'],
+        sans: ["var(--font-geist-sans)"],
+        mono: ["var(--font-geist-mono)"],
+        serif: ["var(--font-fraunces)"],
       },
       borderRadius: {
         sm: "4px",
-        md: "6px",
+        md: "8px",
         lg: "12px",
+        xl: "16px",
+        "2xl": "20px",
       },
       transitionTimingFunction: {
         expo: "cubic-bezier(0.16, 1, 0.3, 1)",
