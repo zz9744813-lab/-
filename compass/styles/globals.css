@@ -294,6 +294,45 @@ a, button, input, textarea, select {
   opacity: 0.4;
 }
 
+/* === Toast animation === */
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(20px) scale(0.95); }
+  to   { opacity: 1; transform: translateX(0) scale(1); }
+}
+.animate-toast-in { animation: toast-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+/* === Mobile responsive === */
+@media (max-width: 1023px) {
+  main {
+    padding: 1rem !important;
+    padding-top: 4rem !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .card-interactive:hover {
+    transform: none;
+  }
+  .glass-hover:hover {
+    transform: none;
+  }
+}
+
+/* === Table responsive wrapper === */
+.table-responsive {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+.table-responsive::-webkit-scrollbar {
+  height: 4px;
+}
+.table-responsive::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 999px;
+}
+
 /* Legacy compat */
 .liquid-glass {
   background: var(--bg-card);
