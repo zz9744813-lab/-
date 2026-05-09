@@ -165,6 +165,15 @@ function toolInputSchema(name: string): Record<string, unknown> {
       );
     case "compass.cancel_schedule_item":
       return objectSchema({ id: { type: "string" } }, ["id"]);
+    case "compass.update_capture":
+      return objectSchema(
+        {
+          id: { type: "string" },
+          status: { type: "string", enum: ["inbox", "completed", "archived"] },
+          dimension: { type: "string" },
+        },
+        ["id"],
+      );
     case "compass.list_schedule_items":
       return objectSchema({
         fromDate: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },

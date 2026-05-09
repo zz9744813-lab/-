@@ -17,6 +17,7 @@ import type { McpTool } from "@/lib/mcp/tools/types";
 import { updateGoalTool } from "@/lib/mcp/tools/update-goal";
 import { updateGoalProgressTool } from "@/lib/mcp/tools/update-goal-progress";
 import { updateJournalEntryTool } from "@/lib/mcp/tools/update-journal-entry";
+import { updateCaptureTool } from "@/lib/mcp/tools/update-capture";
 import { updateScheduleItemTool } from "@/lib/mcp/tools/update-schedule-item";
 
 export const compassTools: McpTool[] = [
@@ -30,6 +31,7 @@ export const compassTools: McpTool[] = [
 
   // Write tools — Hermes calls these to persist chat/upload conclusions
   createCaptureTool,
+  updateCaptureTool,
   createGoalTool,
   updateGoalTool,
   updateGoalProgressTool,
