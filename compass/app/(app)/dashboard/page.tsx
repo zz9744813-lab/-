@@ -1,7 +1,16 @@
 import Link from "next/link";
 import { and, count, desc, eq, gte, ne } from "drizzle-orm";
 import type { LucideIcon } from "lucide-react";
-import { ArrowRight, CalendarCheck2, Inbox, NotebookPen, PiggyBank, RotateCcw, Target } from "lucide-react";
+import {
+  ArrowUpRight,
+  CalendarCheck2,
+  Inbox,
+  NotebookPen,
+  PiggyBank,
+  RotateCcw,
+  Target,
+  TrendingUp,
+} from "lucide-react";
 import { BrainChatPanel, type BrainChatMessageView } from "@/components/brain/brain-chat-panel";
 import { LiveClock } from "@/components/dashboard/live-clock";
 import { getHermesStatus, probeHermesHealth } from "@/lib/hermes/api-client";
@@ -13,7 +22,6 @@ export const dynamic = "force-dynamic";
 
 function startOfWeekDateString() {
   const now = new Date();
-  // Get local day-of-week (0=Sun, 1=Mon, ..., 6=Sat)
   const day = now.getDay();
   const diff = day === 0 ? -6 : 1 - day;
   const monday = new Date(now);
@@ -30,15 +38,14 @@ function toBrainMessageView(row: typeof hermesMessages.$inferSelect): BrainChatM
   };
 }
 
-type DashboardCard = {
+type StatCard = {
   href: string;
   label: string;
   value: string;
   hint: string;
   icon: LucideIcon;
-  delay: string;
+  color: string;
   progress?: number;
-  isText?: boolean;
 };
 
 export default async function DashboardPage() {
@@ -77,14 +84,14 @@ export default async function DashboardPage() {
   const weekJournal = weeklyJournalResult[0]?.value ?? 0;
   const scheduleProgress = scheduleTotal > 0 ? Math.round((scheduleDone / scheduleTotal) * 100) : 0;
 
-  const cards: DashboardCard[] = [
+  const cards: StatCard[] = [
     {
       href: "/schedule",
       label: "今日日程",
-      value: `${scheduleDone} / ${scheduleTotal}`,
-      hint: scheduleTotal === 0 ? "今天还没有安排" : `完成度 ${scheduleProgress}%`,
+      value: `${scheduleDone}/${scheduleTotal}`,
+      hint: scheduleTotal === 0 ? "今天还没有安排" : `完成 ${scheduleProgress}%`,
       icon: CalendarCheck2,
-      delay: "",
+      color: "var(--purple)",
       progress: scheduleProgress,
     },
     {
@@ -93,15 +100,15 @@ export default async function DashboardPage() {
       value: String(activeGoals),
       hint: activeGoals === 0 ? "先定一个清晰目标" : "正在推进",
       icon: Target,
-      delay: "animate-fade-rise-delay",
+      color: "var(--accent)",
     },
     {
       href: "/inbox",
       label: "收件箱",
       value: String(inboxCount),
-      hint: inboxCount === 0 ? "没有待处理输入" : "等待整理",
+      hint: inboxCount === 0 ? "没有待处理" : "等待整理",
       icon: Inbox,
-      delay: "animate-fade-rise-delay-2",
+      color: "var(--blue)",
     },
     {
       href: "/journal",
@@ -109,16 +116,15 @@ export default async function DashboardPage() {
       value: String(weekJournal),
       hint: weekJournal === 0 ? "本周还没记录" : "持续记录中",
       icon: NotebookPen,
-      delay: "",
+      color: "var(--green)",
     },
     {
       href: "/reviews",
       label: "执行质量",
-      value: scheduleTotal === 0 ? "暂无数据" : `${scheduleProgress}%`,
+      value: scheduleTotal === 0 ? "—" : `${scheduleProgress}%`,
       hint: "查看周/月量化",
-      icon: RotateCcw,
-      delay: "animate-fade-rise-delay",
-      isText: true,
+      icon: TrendingUp,
+      color: "var(--orange)",
     },
     {
       href: "/finance",
@@ -126,62 +132,69 @@ export default async function DashboardPage() {
       value: "本月收支",
       hint: "查看账目变化",
       icon: PiggyBank,
-      delay: "animate-fade-rise-delay-2",
-      isText: true,
+      color: "var(--purple)",
     },
   ];
 
   return (
     <section className="space-y-8">
-      <div className="flex flex-col gap-4 animate-fade-rise lg:flex-row lg:items-start lg:justify-between">
+      {/* Header */}
+      <div className="flex flex-col gap-4 animate-fade-rise lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-sm text-text-secondary">今天也在持续成长</p>
-          <h1 className="mt-1 text-5xl" style={{ fontFamily: "var(--font-fraunces)" }}>
-            成长总览
-          </h1>
+          <p className="text-sm text-[var(--text-tertiary)] mb-1">今天也在持续成长</p>
+          <h1 className="text-4xl font-bold tracking-tight">成长总览</h1>
         </div>
         <LiveClock />
       </div>
 
+      {/* Stat Cards Grid */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {cards.map((card) => {
+        {cards.map((card, i) => {
           const Icon = card.icon;
+          const delayClass = i === 0 ? "animate-fade-rise" : i <= 2 ? "animate-fade-rise-delay" : "animate-fade-rise-delay-2";
           return (
-          <Link
-            key={card.label + card.href}
-            href={card.href}
-            className={`glass glass-hover group flex min-h-40 flex-col justify-between p-6 animate-fade-rise ${card.delay}`}
-          >
-            <div className="flex items-start justify-between gap-4">
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-border bg-bg-elevated text-accent transition group-hover:border-accent/50 group-hover:bg-accent-muted">
-                <Icon className="h-5 w-5" />
-              </span>
-              <ArrowRight className="h-4 w-4 text-text-tertiary transition group-hover:translate-x-1 group-hover:text-text-secondary" />
-            </div>
-            <div>
-              <p className="text-sm text-text-secondary">{card.label}</p>
-              <p className={card.isText ? "mt-2 line-clamp-2 text-lg font-semibold leading-7" : "mt-2 font-mono text-3xl"}>
-                {card.value}
-              </p>
-              <p className="mt-1 text-sm text-text-tertiary">{card.hint}</p>
-              {typeof card.progress === "number" ? (
-                <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/10">
-                  <div className="h-full rounded-full bg-accent transition-all duration-500" style={{ width: `${card.progress}%` }} />
+            <Link
+              key={card.href + card.label}
+              href={card.href}
+              className={`card card-interactive group flex flex-col justify-between p-5 min-h-[140px] ${delayClass}`}
+            >
+              <div className="flex items-start justify-between">
+                <div
+                  className="w-10 h-10 rounded-xl flex items-center justify-center"
+                  style={{ background: `color-mix(in srgb, ${card.color} 15%, transparent)` }}
+                >
+                  <Icon className="w-5 h-5" style={{ color: card.color }} />
                 </div>
-              ) : null}
-            </div>
-          </Link>
+                <ArrowUpRight
+                  className="w-4 h-4 text-[var(--text-tertiary)] transition-all group-hover:text-[var(--text-secondary)] group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+                />
+              </div>
+              <div className="mt-4">
+                <p className="text-xs text-[var(--text-tertiary)] uppercase tracking-wide">{card.label}</p>
+                <p className="mt-1 text-2xl font-bold font-mono">{card.value}</p>
+                <p className="mt-0.5 text-xs text-[var(--text-tertiary)]">{card.hint}</p>
+                {typeof card.progress === "number" && (
+                  <div className="progress-bar mt-3">
+                    <div
+                      className="progress-bar-fill"
+                      style={{ width: `${card.progress}%`, background: card.color }}
+                    />
+                  </div>
+                )}
+              </div>
+            </Link>
           );
         })}
       </div>
 
+      {/* Brain Chat */}
       <BrainChatPanel
         source="dashboard"
         initialMessages={recentMessages.slice().reverse().map(toBrainMessageView)}
         statusLabel={brainStatusLabel}
         isLive={brainReady}
         disabled={!brainReady}
-        className="animate-fade-rise-delay-2"
+        className="animate-fade-rise-delay-3"
       />
     </section>
   );
