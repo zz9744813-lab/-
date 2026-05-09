@@ -22,7 +22,7 @@ import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 const NAV_ITEMS: { href: string; label: string; icon: any; feature?: string }[] = [
   { href: "/dashboard", label: "总览", icon: House },
-  { href: "/schedule", label: "日程", icon: CalendarClock },
+  { href: "/schedule", label: "周程", icon: CalendarClock },
   { href: "/goals", label: "目标", icon: Goal },
   { href: "/habits", label: "习惯", icon: Repeat },
   { href: "/journal", label: "日记", icon: NotebookPen },
