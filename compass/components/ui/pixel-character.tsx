@@ -2,20 +2,19 @@
 
 import { useState, useCallback } from "react";
 
-type Mood = "idle" | "happy" | "cheer" | "pout" | "wink" | "blush";
+type Mood = "idle" | "happy" | "cheer" | "wink" | "blush";
 
 const MOOD_CONFIG: Record<Mood, { emoji: string; text: string; duration: number }> = {
   idle: { emoji: "", text: "", duration: 0 },
   happy: { emoji: "✨", text: "がんばって!", duration: 2500 },
   cheer: { emoji: "🎉", text: "すごい!", duration: 2500 },
-  pout: { emoji: "💢", text: "サボらないで!", duration: 2500 },
   wink: { emoji: "💕", text: "いい感じ~", duration: 2500 },
   blush: { emoji: "🌸", text: "えへへ…", duration: 2500 },
 };
 
 /**
- * 像素风性感美女角色 — 多邻国风格可交互吉祥物
- * 支持点击/hover触发不同情绪
+ * 娜美风格像素美女 — 橘发大眼 + 性感身材
+ * 多邻国式可交互吉祥物
  */
 export function PixelCharacter({ className = "" }: { className?: string }) {
   const [mood, setMood] = useState<Mood>("idle");
@@ -29,7 +28,6 @@ export function PixelCharacter({ className = "" }: { className?: string }) {
   const handleClick = () => {
     const count = clickCount + 1;
     setClickCount(count);
-
     if (count % 5 === 0) {
       triggerMood("blush");
     } else if (count % 3 === 0) {
@@ -41,39 +39,13 @@ export function PixelCharacter({ className = "" }: { className?: string }) {
   };
 
   const handleMouseEnter = () => {
-    if (mood === "idle") {
-      triggerMood("happy");
-    }
+    if (mood === "idle") triggerMood("happy");
   };
 
-  // 根据情绪变化眼睛和嘴巴
-  const getEyes = () => {
-    switch (mood) {
-      case "happy": return { left: "^", right: "^" };
-      case "cheer": return { left: "★", right: "★" };
-      case "pout": return { left: ">", right: "<" };
-      case "wink": return { left: "−", right: "●" };
-      case "blush": return { left: "≧", right: "≦" };
-      default: return { left: "●", right: "●" };
-    }
-  };
-
-  const getMouth = () => {
-    switch (mood) {
-      case "happy": return "ω";
-      case "cheer": return "▽";
-      case "pout": return "3";
-      case "wink": return "∀";
-      case "blush": return "///";
-      default: return "◡";
-    }
-  };
-
-  const eyes = getEyes();
-  const mouth = getMouth();
   const moodInfo = MOOD_CONFIG[mood];
   const isActive = mood !== "idle";
 
+  // 娜美风：大眼、橘色长发、比基尼上衣、牛仔短裤、长腿
   return (
     <div
       className={`pixel-mascot group relative select-none ${className}`}
@@ -92,90 +64,161 @@ export function PixelCharacter({ className = "" }: { className?: string }) {
         </div>
       )}
 
-      {/* Character body — pixel art style */}
       <svg
-        viewBox="0 0 32 48"
+        viewBox="0 0 32 56"
         width="56"
-        height="84"
+        height="98"
         className="transition-transform duration-200 group-hover:scale-110 group-active:scale-95"
         style={{ imageRendering: "pixelated" }}
       >
-        {/* Hair */}
-        <rect x="8" y="0" width="16" height="4" fill="#2d1b69" />
-        <rect x="6" y="2" width="4" height="10" fill="#2d1b69" />
-        <rect x="22" y="2" width="4" height="10" fill="#2d1b69" />
-        <rect x="7" y="4" width="18" height="4" fill="#3d2b7a" />
-        <rect x="24" y="6" width="3" height="14" fill="#2d1b69" />
-        <rect x="5" y="6" width="3" height="14" fill="#2d1b69" />
+        {/* === HAIR (orange, long, flowing) === */}
+        <rect x="9" y="0" width="14" height="3" fill="#FF6B00" />
+        <rect x="7" y="2" width="18" height="3" fill="#FF8C00" />
+        <rect x="6" y="4" width="20" height="4" fill="#FF6B00" />
+        {/* Side hair flowing down */}
+        <rect x="5" y="5" width="3" height="18" fill="#FF8C00" />
+        <rect x="24" y="5" width="3" height="18" fill="#FF8C00" />
+        <rect x="4" y="10" width="2" height="12" fill="#FF6B00" />
+        <rect x="26" y="10" width="2" height="12" fill="#FF6B00" />
+        {/* Hair bangs */}
+        <rect x="9" y="5" width="4" height="3" fill="#FF8C00" />
+        <rect x="19" y="5" width="4" height="3" fill="#FF8C00" />
 
-        {/* Face */}
-        <rect x="8" y="6" width="16" height="14" fill="#fdd9b5" />
+        {/* === FACE === */}
+        <rect x="9" y="7" width="14" height="12" fill="#FFE0BD" />
+
+        {/* Big eyes — anime style */}
+        {mood === "wink" ? (
+          <>
+            {/* Left eye winking */}
+            <rect x="11" y="11" width="4" height="1" fill="#2d1b00" />
+            {/* Right eye open */}
+            <rect x="19" y="10" width="4" height="4" fill="#FFFFFF" />
+            <rect x="20" y="11" width="2" height="2" fill="#4A2800" />
+            <rect x="20" y="11" width="1" height="1" fill="#FFFFFF" />
+          </>
+        ) : mood === "happy" || mood === "cheer" ? (
+          <>
+            {/* Happy closed eyes ^ ^ */}
+            <rect x="11" y="12" width="4" height="1" fill="#2d1b00" />
+            <rect x="12" y="11" width="2" height="1" fill="#2d1b00" />
+            <rect x="19" y="12" width="4" height="1" fill="#2d1b00" />
+            <rect x="20" y="11" width="2" height="1" fill="#2d1b00" />
+          </>
+        ) : mood === "blush" ? (
+          <>
+            {/* Shy eyes */}
+            <rect x="11" y="11" width="4" height="2" fill="#4A2800" />
+            <rect x="12" y="11" width="1" height="1" fill="#FFFFFF" />
+            <rect x="19" y="11" width="4" height="2" fill="#4A2800" />
+            <rect x="20" y="11" width="1" height="1" fill="#FFFFFF" />
+          </>
+        ) : (
+          <>
+            {/* Normal big eyes */}
+            <rect x="10" y="10" width="5" height="4" fill="#FFFFFF" />
+            <rect x="11" y="11" width="3" height="2" fill="#4A2800" />
+            <rect x="12" y="11" width="1" height="1" fill="#FFFFFF" />
+            <rect x="19" y="10" width="5" height="4" fill="#FFFFFF" />
+            <rect x="20" y="11" width="3" height="2" fill="#4A2800" />
+            <rect x="21" y="11" width="1" height="1" fill="#FFFFFF" />
+          </>
+        )}
 
         {/* Blush cheeks */}
         {(mood === "blush" || mood === "happy") && (
           <>
-            <rect x="8" y="13" width="3" height="2" fill="#ff9999" opacity="0.6" />
-            <rect x="21" y="13" width="3" height="2" fill="#ff9999" opacity="0.6" />
+            <rect x="9" y="14" width="3" height="2" fill="#FF9999" opacity="0.5" />
+            <rect x="20" y="14" width="3" height="2" fill="#FF9999" opacity="0.5" />
           </>
         )}
 
-        {/* Eyes */}
-        <text x="11" y="13" fontSize="4" fill="#1a1a2e" textAnchor="middle" fontFamily="monospace">{eyes.left}</text>
-        <text x="21" y="13" fontSize="4" fill="#1a1a2e" textAnchor="middle" fontFamily="monospace">{eyes.right}</text>
-
         {/* Mouth */}
-        <text x="16" y="18" fontSize="3.5" fill="#e74c6f" textAnchor="middle" fontFamily="monospace">{mouth}</text>
+        {mood === "happy" || mood === "cheer" ? (
+          <rect x="14" y="16" width="4" height="2" fill="#FF6B8A" rx="1" />
+        ) : mood === "blush" ? (
+          <>
+            <rect x="14" y="16" width="4" height="1" fill="#FF6B8A" />
+            <rect x="15" y="17" width="2" height="1" fill="#FF6B8A" />
+          </>
+        ) : (
+          <rect x="14" y="16" width="4" height="1" fill="#FF6B8A" />
+        )}
 
-        {/* Neck */}
-        <rect x="13" y="20" width="6" height="2" fill="#fdd9b5" />
+        {/* === NECK === */}
+        <rect x="14" y="19" width="4" height="2" fill="#FFE0BD" />
 
-        {/* Body — crop top */}
-        <rect x="9" y="22" width="14" height="4" fill="#e74c6f" />
-        <rect x="8" y="22" width="2" height="3" fill="#fdd9b5" />
-        <rect x="22" y="22" width="2" height="3" fill="#fdd9b5" />
+        {/* === BODY — Bikini top (blue striped like Nami) === */}
+        <rect x="10" y="21" width="12" height="5" fill="#FFE0BD" />
+        <rect x="11" y="21" width="4" height="4" fill="#2196F3" />
+        <rect x="17" y="21" width="4" height="4" fill="#2196F3" />
+        <rect x="11" y="22" width="4" height="1" fill="#1565C0" />
+        <rect x="17" y="22" width="4" height="1" fill="#1565C0" />
+        {/* Strap */}
+        <rect x="14" y="20" width="1" height="2" fill="#2196F3" />
+        <rect x="17" y="20" width="1" height="2" fill="#2196F3" />
 
-        {/* Midriff */}
-        <rect x="11" y="26" width="10" height="3" fill="#fdd9b5" />
+        {/* === WAIST (slim) === */}
+        <rect x="12" y="26" width="8" height="3" fill="#FFE0BD" />
+        {/* Navel */}
+        <rect x="15" y="27" width="2" height="1" fill="#EDCBA0" />
 
-        {/* Skirt */}
-        <rect x="9" y="29" width="14" height="6" fill="#6c3baa" />
-        <rect x="8" y="31" width="16" height="4" fill="#5a2d91" />
+        {/* === SHORTS (denim) === */}
+        <rect x="10" y="29" width="12" height="5" fill="#1565C0" />
+        <rect x="10" y="29" width="12" height="1" fill="#0D47A1" />
+        {/* Belt */}
+        <rect x="10" y="29" width="12" height="1" fill="#795548" />
+        <rect x="15" y="29" width="2" height="1" fill="#FFD700" />
 
-        {/* Legs */}
-        <rect x="10" y="35" width="4" height="8" fill="#fdd9b5" />
-        <rect x="18" y="35" width="4" height="8" fill="#fdd9b5" />
+        {/* === LEGS (long, slim) === */}
+        <rect x="11" y="34" width="4" height="12" fill="#FFE0BD" />
+        <rect x="17" y="34" width="4" height="12" fill="#FFE0BD" />
 
-        {/* Shoes */}
-        <rect x="9" y="43" width="5" height="3" fill="#e74c6f" />
-        <rect x="18" y="43" width="5" height="3" fill="#e74c6f" />
+        {/* === SANDALS === */}
+        <rect x="10" y="46" width="5" height="2" fill="#FF6B00" />
+        <rect x="17" y="46" width="5" height="2" fill="#FF6B00" />
+        <rect x="12" y="45" width="1" height="1" fill="#FF8C00" />
+        <rect x="19" y="45" width="1" height="1" fill="#FF8C00" />
 
-        {/* Arms */}
-        <rect
-          x={mood === "cheer" ? "4" : "6"}
-          y={mood === "cheer" ? "18" : "22"}
-          width="3"
-          height={mood === "cheer" ? "6" : "8"}
-          fill="#fdd9b5"
-        />
-        <rect
-          x={mood === "cheer" ? "25" : "23"}
-          y={mood === "cheer" ? "18" : "22"}
-          width="3"
-          height={mood === "cheer" ? "6" : "8"}
-          fill="#fdd9b5"
-        />
+        {/* === ARMS === */}
+        {mood === "cheer" ? (
+          <>
+            {/* Arms raised */}
+            <rect x="6" y="16" width="3" height="8" fill="#FFE0BD" />
+            <rect x="23" y="16" width="3" height="8" fill="#FFE0BD" />
+            {/* Hands */}
+            <rect x="6" y="14" width="3" height="3" fill="#FFE0BD" />
+            <rect x="23" y="14" width="3" height="3" fill="#FFE0BD" />
+          </>
+        ) : mood === "wink" ? (
+          <>
+            {/* One hand on hip, one waving */}
+            <rect x="7" y="22" width="3" height="7" fill="#FFE0BD" />
+            <rect x="23" y="18" width="3" height="6" fill="#FFE0BD" />
+            <rect x="23" y="16" width="3" height="3" fill="#FFE0BD" />
+          </>
+        ) : (
+          <>
+            {/* Relaxed arms */}
+            <rect x="7" y="22" width="3" height="9" fill="#FFE0BD" />
+            <rect x="22" y="22" width="3" height="9" fill="#FFE0BD" />
+          </>
+        )}
 
-        {/* Sparkle effects when active */}
+        {/* Sparkles when active */}
         {isActive && (
           <>
-            <rect x="2" y="4" width="2" height="2" fill="var(--accent)" opacity="0.8">
-              <animate attributeName="opacity" values="0.8;0.2;0.8" dur="0.8s" repeatCount="indefinite" />
+            <rect x="1" y="3" width="2" height="2" fill="#FFD700" opacity="0.9">
+              <animate attributeName="opacity" values="0.9;0.2;0.9" dur="0.7s" repeatCount="indefinite" />
             </rect>
-            <rect x="28" y="8" width="2" height="2" fill="var(--purple)" opacity="0.8">
-              <animate attributeName="opacity" values="0.2;0.8;0.2" dur="0.8s" repeatCount="indefinite" />
+            <rect x="28" y="6" width="2" height="2" fill="#FF69B4" opacity="0.8">
+              <animate attributeName="opacity" values="0.2;0.9;0.2" dur="0.8s" repeatCount="indefinite" />
             </rect>
-            <rect x="3" y="38" width="2" height="2" fill="var(--orange)" opacity="0.6">
-              <animate attributeName="opacity" values="0.6;0.1;0.6" dur="1s" repeatCount="indefinite" />
+            <rect x="2" y="40" width="2" height="2" fill="#00BCD4" opacity="0.7">
+              <animate attributeName="opacity" values="0.7;0.1;0.7" dur="1s" repeatCount="indefinite" />
+            </rect>
+            <rect x="29" y="35" width="2" height="2" fill="#FFD700" opacity="0.6">
+              <animate attributeName="opacity" values="0.3;0.8;0.3" dur="0.9s" repeatCount="indefinite" />
             </rect>
           </>
         )}
