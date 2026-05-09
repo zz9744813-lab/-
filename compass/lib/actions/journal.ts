@@ -1,5 +1,6 @@
 "use server";
 
+import { localDateString } from "@/lib/datetime";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
@@ -39,7 +40,7 @@ export async function createJournalAction(formData: FormData) {
   const title = String(formData.get("title") ?? "").trim();
   const content = String(formData.get("content") ?? "").trim();
   if (!content) return;
-  const date = String(formData.get("date") ?? "").trim() || new Date().toISOString().slice(0, 10);
+  const date = String(formData.get("date") ?? "").trim() || localDateString();
   await db.insert(journalEntries).values({
     title: title || null,
     content,

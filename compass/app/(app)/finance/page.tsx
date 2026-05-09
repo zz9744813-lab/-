@@ -1,3 +1,4 @@
+import { localDateString } from "@/lib/datetime";
 import Link from "next/link";
 import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
 import { FinanceTable, type FinanceRow } from "@/components/finance/finance-table";
@@ -88,7 +89,7 @@ export default async function FinancePage({ searchParams }: { searchParams?: { v
     note: row.note,
   }));
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateString();
 
   return (
     <section className="space-y-6">

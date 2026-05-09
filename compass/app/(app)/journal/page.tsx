@@ -1,3 +1,4 @@
+import { localDateString } from "@/lib/datetime";
 import { desc } from "drizzle-orm";
 import { JournalTable, type JournalRow } from "@/components/journal/journal-table";
 import { createJournalAction } from "@/lib/actions/journal";
@@ -22,7 +23,7 @@ export default async function JournalPage() {
     tags: row.tags ?? null,
   }));
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateString();
 
   return (
     <section className="space-y-6">

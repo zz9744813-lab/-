@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { localDateString } from "@/lib/datetime";
 import { generateWeeklyDigest } from "@/lib/japan/digest";
 import { sendJapanIntelEmail } from "@/lib/japan/email";
 import { db } from "@/lib/db/client";
@@ -16,9 +17,9 @@ export async function POST(req: NextRequest) {
 
   // Calculate last week's date range
   const now = new Date();
-  const periodEnd = now.toISOString().slice(0, 10);
+  const periodEnd = localDateString(now);
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const periodStart = weekAgo.toISOString().slice(0, 10);
+  const periodStart = localDateString(weekAgo);
 
   const digest = await generateWeeklyDigest(periodStart, periodEnd);
 

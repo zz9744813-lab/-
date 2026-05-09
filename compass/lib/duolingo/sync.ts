@@ -1,3 +1,4 @@
+import { localDateString } from "@/lib/datetime";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { duolingoSnapshots, duolingoSyncLog, duolingoXpEvents } from "@/lib/db/schema";
@@ -23,7 +24,7 @@ export async function runDuolingoSync(): Promise<{ ok: boolean; status: string; 
     }
 
     const data = await fetchDuolingoUser(config);
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDateString();
 
     await db
       .insert(duolingoSnapshots)

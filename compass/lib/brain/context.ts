@@ -1,4 +1,5 @@
 import { and, asc, count, desc, eq, gte } from "drizzle-orm";
+import { localDateString } from "@/lib/datetime";
 import { db } from "@/lib/db/client";
 import {
   captures,
@@ -13,7 +14,7 @@ import {
 } from "@/lib/db/schema";
 
 function todayDateString() {
-  return new Date().toISOString().slice(0, 10);
+  return localDateString();
 }
 
 function weekStartDateString() {
@@ -22,8 +23,7 @@ function weekStartDateString() {
   const diff = day === 0 ? -6 : 1 - day;
   const monday = new Date(now);
   monday.setDate(now.getDate() + diff);
-  monday.setHours(0, 0, 0, 0);
-  return monday.toISOString().slice(0, 10);
+  return monday.toLocaleString("sv-SE", { timeZone: "Asia/Shanghai" }).slice(0, 10);
 }
 
 function truncateText(value: string, max = 300) {
@@ -111,9 +111,12 @@ async function getHabitsContext() {
 
 async function getRecentJournalContext() {
   try {
-    const from = new Date();
+    const now = new Date();
+    const tz = "Asia/Shanghai";
+    const todayStr = now.toLocaleString("sv-SE", { timeZone: tz }).slice(0, 10);
+    const from = new Date(now);
     from.setDate(from.getDate() - 6);
-    const fromDate = from.toISOString().slice(0, 10);
+    const fromDate = from.toLocaleString("sv-SE", { timeZone: tz }).slice(0, 10);
 
     const rows = await db
       .select()

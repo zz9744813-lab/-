@@ -31,8 +31,15 @@ export function todayDateInputValue(): string {
  * Uses Asia/Shanghai as default since this is a Chinese user's personal system.
  * This avoids UTC date mismatch issues around midnight.
  */
-export function localDateString(timeZone = "Asia/Shanghai"): string {
-  return new Date().toLocaleDateString("sv-SE", { timeZone });
+export function localDateString(date: Date, timeZone?: string): string;
+export function localDateString(timeZone?: string): string;
+export function localDateString(dateOrTz?: Date | string, timeZoneOrNothing?: string): string {
+  if (dateOrTz instanceof Date) {
+    const tz = timeZoneOrNothing ?? "Asia/Shanghai";
+    return dateOrTz.toLocaleDateString("sv-SE", { timeZone: tz });
+  }
+  const tz = dateOrTz ?? "Asia/Shanghai";
+  return new Date().toLocaleDateString("sv-SE", { timeZone: tz });
 }
 
 export function formatDateInput(value: DateLike): string {
@@ -43,8 +50,15 @@ export function formatDate(value: DateLike, fallback = "未设置"): string {
   return formatDateInput(value) || fallback;
 }
 
+export function localDateTimeString(timeZone = "Asia/Shanghai"): string {
+  return new Date().toLocaleString("sv-SE", { timeZone }).replace(" ", "T").slice(0, 16);
+}
+
 export function formatDateTime(value: DateLike, fallback = "未知时间"): string {
   const date = coerceDate(value);
   if (!date) return fallback;
-  return date.toISOString().replace("T", " ").slice(0, 16);
+  return new Date(date.getTime() + date.getTimezoneOffset() * 60000)
+    .toISOString()
+    .replace("T", " ")
+    .slice(0, 16);
 }

@@ -26,7 +26,7 @@ function mondayKey(dateString: string) {
   const day = date.getDay();
   const diff = day === 0 ? -6 : 1 - day;
   date.setDate(date.getDate() + diff);
-  return date.toISOString().slice(0, 10);
+  return date.toLocaleString("sv-SE", { timeZone: "Asia/Shanghai" }).slice(0, 10);
 }
 
 function monthKey(dateString: string) {
@@ -34,7 +34,7 @@ function monthKey(dateString: string) {
 }
 
 function memoryDate(row: MemoryRow) {
-  return row.startDate ?? row.endDate ?? row.createdAt.toISOString().slice(0, 10);
+  return row.startDate ?? row.endDate ?? row.createdAt.toLocaleString("sv-SE", { timeZone: "Asia/Shanghai" }).slice(0, 10);
 }
 
 function average(values: number[]) {

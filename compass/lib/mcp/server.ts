@@ -6,7 +6,9 @@ const MCP_PROTOCOL_VERSION = "2024-11-05";
 const SERVER_INFO = { name: "compass-mcp", version: "0.1.0" };
 const JSON_HEADERS = {
   "Cache-Control": "no-store",
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": process.env.NODE_ENV === "production"
+    ? (process.env.COMPASS_CORS_ORIGIN || "null")
+    : "*",
   "Access-Control-Allow-Headers": "authorization, content-type, mcp-session-id",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };

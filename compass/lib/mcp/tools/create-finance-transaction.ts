@@ -1,5 +1,6 @@
 import { db } from "@/lib/db/client";
 import { financeTransactions } from "@/lib/db/schema";
+import { localDateString } from "@/lib/datetime";
 import type { McpTool } from "@/lib/mcp/tools/types";
 
 const TYPES = new Set(["income", "expense"]);
@@ -17,7 +18,7 @@ export const createFinanceTransactionTool: McpTool = {
     if (!Number.isFinite(amount) || amount <= 0) throw new Error("amount must be a positive number");
 
     const dateRaw = params.date ? String(params.date).trim() : "";
-    const date = dateRaw && DATE_RE.test(dateRaw) ? dateRaw : new Date().toISOString().slice(0, 10);
+    const date = dateRaw && DATE_RE.test(dateRaw) ? dateRaw : localDateString();
 
     const category = (() => {
       const raw = params.category;

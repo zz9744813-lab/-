@@ -14,6 +14,10 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import { hermesMessages, brainRuns } from "@/lib/db/schema";
+import crypto from "node:crypto";
 
 const MAX_FILES = 8;
 const MAX_TOTAL_BYTES = 10 * 1024 * 1024;
@@ -23,10 +27,35 @@ const HERMES_API_KEY = process.env.HERMES_API_KEY ?? "";
 const HERMES_MODEL = process.env.HERMES_MODEL ?? "hermes-agent";
 
 export async function POST(request: Request) {
+  let brainRunId: string | null = null;
+  const startedAt = Date.now();
   try {
     const formData = await request.formData();
     const userMessage = String(formData.get("message") ?? "").trim();
     const sessionId = String(formData.get("sessionId") ?? "default-session").trim();
+
+    // Save user message to DB
+    try {
+      await db.insert(hermesMessages).values({
+        threadId: sessionId,
+        role: "user",
+        content: userMessage,
+        source: "compass-brain",
+      });
+    } catch { /* non-blocking */ }
+
+    // Create brain run record
+    try {
+      const runId = crypto.randomUUID();
+      brainRunId = runId;
+      await db.insert(brainRuns).values({
+        id: runId,
+        source: "brain",
+        userInput: userMessage,
+        status: "running",
+      });
+    } catch { /* non-blocking */ }
+
     const files = formData
       .getAll("files")
       .filter((value): value is File => value instanceof File)
@@ -128,7 +157,31 @@ export async function POST(request: Request) {
     }
 
     // Pipe Hermes SSE stream directly back to the frontend
-    return new Response(hermesResponse.body, {
+    const body = hermesResponse.body;
+    // Schedule brain run completion after stream ends (best-effort)
+    if (brainRunId) {
+      body?.pipeTo?.(
+        new WritableStream({
+          close() {
+            db.update(brainRuns).set({
+              status: "completed",
+              durationMs: Date.now() - startedAt,
+              finishedAt: new Date(),
+            }).where(eq(brainRuns.id, brainRunId!)).catch(() => {});
+          },
+          abort() {
+            db.update(brainRuns).set({
+              status: "failed",
+              durationMs: Date.now() - startedAt,
+              errorMessage: "Stream aborted",
+              finishedAt: new Date(),
+            }).where(eq(brainRuns.id, brainRunId!)).catch(() => {});
+          },
+        }),
+      );
+    }
+
+    return new Response(body, {
       headers: {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
@@ -136,6 +189,14 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
+    if (brainRunId) {
+      db.update(brainRuns).set({
+        status: "failed",
+        durationMs: Date.now() - startedAt,
+        errorMessage: error instanceof Error ? error.message : "Unknown error",
+        finishedAt: new Date(),
+      }).where(eq(brainRuns.id, brainRunId)).catch(() => {});
+    }
     return NextResponse.json(
       { ok: false, error: error instanceof Error ? error.message : "Hermes 对话失败。" },
       { status: 500 },

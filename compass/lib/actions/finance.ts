@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import { financeTransactions } from "@/lib/db/schema";
 
+import { localDateString } from "@/lib/datetime";
+
 const TYPES = new Set(["income", "expense"]);
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const STRING_FIELDS = new Set(["type", "category", "note", "date"]);
@@ -46,7 +48,7 @@ export async function createTransactionAction(formData: FormData) {
   if (!Number.isFinite(amount) || amount <= 0) return;
   const category = String(formData.get("category") ?? "").trim();
   const note = String(formData.get("note") ?? "").trim();
-  const date = String(formData.get("date") ?? "").trim() || new Date().toISOString().slice(0, 10);
+  const date = String(formData.get("date") ?? "").trim() || localDateString();
   await db.insert(financeTransactions).values({
     type,
     amount,

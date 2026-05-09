@@ -1,5 +1,6 @@
 import { db } from "@/lib/db/client";
 import { journalEntries } from "@/lib/db/schema";
+import { localDateString } from "@/lib/datetime";
 import type { McpTool } from "@/lib/mcp/tools/types";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -20,7 +21,7 @@ export const createJournalEntryTool: McpTool = {
     })();
 
     const dateRaw = params.date ? String(params.date).trim() : "";
-    const date = dateRaw && DATE_RE.test(dateRaw) ? dateRaw : new Date().toISOString().slice(0, 10);
+    const date = dateRaw && DATE_RE.test(dateRaw) ? dateRaw : localDateString();
 
     const mood = (() => {
       if (params.mood === undefined || params.mood === null) return null;

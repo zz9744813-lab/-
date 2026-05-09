@@ -10,11 +10,12 @@
 import { db } from "@/lib/db/client";
 import { scheduleItems, coachEvents } from "@/lib/db/schema";
 import { and, gte, lte } from "drizzle-orm";
+import { localDateString } from "@/lib/datetime";
 import crypto from "node:crypto";
 import { callHermes } from "@/lib/hermes/api-client";
 
 function isoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  return d.toLocaleString("sv-SE", { timeZone: "Asia/Shanghai" }).slice(0, 10);
 }
 
 export async function runWeeklyReflection(): Promise<number> {
