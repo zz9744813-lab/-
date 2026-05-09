@@ -37,7 +37,7 @@ export function FinanceTable({ rows }: { rows: FinanceRow[] }) {
 
   return (
     <div className="glass overflow-hidden">
-      <div className="overflow-x-auto">
+      <div className="table-responsive">
         <table className="w-full min-w-[860px] border-collapse text-sm">
           <thead>
             <tr className="border-b border-white/5 text-left text-xs uppercase tracking-wider text-text-tertiary">

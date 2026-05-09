@@ -4,6 +4,7 @@ import { db } from "@/lib/db/client";
 import { habits, habitLogs } from "@/lib/db/schema";
 import { localDateString } from "@/lib/datetime";
 import { Repeat, Plus, Check, Flame } from "lucide-react";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -117,7 +118,7 @@ export default async function HabitsPage() {
           <option value="daily">每天</option>
           <option value="weekly">每周</option>
         </select>
-        <button type="submit" className="glass-btn-primary px-4 py-2 text-sm rounded-xl">
+        <button type="submit" className="glass-btn glass-btn-primary px-4 py-2 text-sm rounded-xl">
           添加
         </button>
       </form>
@@ -132,7 +133,7 @@ export default async function HabitsPage() {
       ) : (
         <div className="space-y-3 animate-fade-rise-delay-2">
           {/* Day header */}
-          <div className="grid grid-cols-[1fr_repeat(7,40px)_60px] gap-2 px-4 text-xs text-[var(--text-tertiary)]">
+          <div className="hidden sm:grid grid-cols-[1fr_repeat(7,40px)_60px] gap-2 px-4 text-xs text-[var(--text-tertiary)]">
             <span>习惯</span>
             {dayLabels.map((d, i) => (
               <span key={i} className="text-center">{d}</span>
@@ -149,43 +150,89 @@ export default async function HabitsPage() {
             return (
               <div
                 key={habit.id}
-                className="card grid grid-cols-[1fr_repeat(7,40px)_60px] gap-2 items-center px-4 py-3"
+                className="card px-4 py-3"
               >
-                <div>
-                  <p className="text-sm font-medium text-[var(--text-primary)]">{habit.name}</p>
-                  <p className="text-xs text-[var(--text-tertiary)]">
-                    {habit.frequency === "daily" ? "每天" : "每周"}
-                  </p>
+                {/* Desktop: grid layout */}
+                <div className="hidden sm:grid grid-cols-[1fr_repeat(7,40px)_60px] gap-2 items-center">
+                  <div>
+                    <p className="text-sm font-medium text-[var(--text-primary)]">{habit.name}</p>
+                    <p className="text-xs text-[var(--text-tertiary)]">
+                      {habit.frequency === "daily" ? "每天" : "每周"}
+                    </p>
+                  </div>
+
+                  {last7.map((date) => {
+                    const done = logDates.has(date);
+                    const isToday = date === today;
+                    return (
+                      <form key={date} action={toggleHabit} className="flex justify-center">
+                        <input type="hidden" name="habitId" value={habit.id} />
+                        <input type="hidden" name="date" value={date} />
+                        <button
+                          type="submit"
+                          className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 ${
+                            done
+                              ? "bg-[var(--green)] text-white shadow-sm"
+                              : isToday
+                                ? "border-2 border-dashed border-[var(--border-strong)] hover:border-[var(--green)] hover:bg-[var(--green-muted)]"
+                                : "bg-[var(--bg-elevated)] text-[var(--text-tertiary)]"
+                          }`}
+                        >
+                          {done && <Check size={14} strokeWidth={3} />}
+                        </button>
+                      </form>
+                    );
+                  })}
+
+                  <div className="flex items-center justify-center gap-1">
+                    {streak > 0 && <Flame size={14} className="text-[var(--orange)]" />}
+                    <span className={`text-sm font-mono ${streak > 0 ? "text-[var(--orange)]" : "text-[var(--text-tertiary)]"}`}>
+                      {streak}天
+                    </span>
+                  </div>
                 </div>
 
-                {last7.map((date) => {
-                  const done = logDates.has(date);
-                  const isToday = date === today;
-                  return (
-                    <form key={date} action={toggleHabit} className="flex justify-center">
-                      <input type="hidden" name="habitId" value={habit.id} />
-                      <input type="hidden" name="date" value={date} />
-                      <button
-                        type="submit"
-                        className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 ${
-                          done
-                            ? "bg-[var(--green)] text-white shadow-sm"
-                            : isToday
-                              ? "border-2 border-dashed border-[var(--border-strong)] hover:border-[var(--green)] hover:bg-[var(--green-muted)]"
-                              : "bg-[var(--bg-elevated)] text-[var(--text-tertiary)]"
-                        }`}
-                      >
-                        {done && <Check size={14} strokeWidth={3} />}
-                      </button>
-                    </form>
-                  );
-                })}
-
-                <div className="flex items-center justify-center gap-1">
-                  {streak > 0 && <Flame size={14} className="text-[var(--orange)]" />}
-                  <span className={`text-sm font-mono ${streak > 0 ? "text-[var(--orange)]" : "text-[var(--text-tertiary)]"}`}>
-                    {streak}天
-                  </span>
+                {/* Mobile: stacked layout */}
+                <div className="sm:hidden">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <p className="text-sm font-medium text-[var(--text-primary)]">{habit.name}</p>
+                      <p className="text-xs text-[var(--text-tertiary)]">
+                        {habit.frequency === "daily" ? "每天" : "每周"}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {streak > 0 && <Flame size={14} className="text-[var(--orange)]" />}
+                      <span className={`text-sm font-mono ${streak > 0 ? "text-[var(--orange)]" : "text-[var(--text-tertiary)]"}`}>
+                        {streak}天
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex gap-1.5 justify-between">
+                    {last7.map((date, i) => {
+                      const done = logDates.has(date);
+                      const isToday = date === today;
+                      return (
+                        <form key={date} action={toggleHabit} className="flex flex-col items-center gap-1">
+                          <span className="text-[10px] text-[var(--text-tertiary)]">{dayLabels[i]}</span>
+                          <input type="hidden" name="habitId" value={habit.id} />
+                          <input type="hidden" name="date" value={date} />
+                          <button
+                            type="submit"
+                            className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 ${
+                              done
+                                ? "bg-[var(--green)] text-white shadow-sm"
+                                : isToday
+                                  ? "border-2 border-dashed border-[var(--border-strong)] hover:border-[var(--green)] hover:bg-[var(--green-muted)]"
+                                  : "bg-[var(--bg-elevated)] text-[var(--text-tertiary)]"
+                            }`}
+                          >
+                            {done && <Check size={14} strokeWidth={3} />}
+                          </button>
+                        </form>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             );
