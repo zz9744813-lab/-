@@ -1,156 +1,159 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
 /**
- * 像素风格动画小人 — 8-bit RPG 风格
- * 会做简单的走路/跳跃动画
+ * Live2D 桌宠 - 自托管版本，不依赖外部CDN
  */
-export function PixelCharacter({ className = "" }: { className?: string }) {
-  const [frame, setFrame] = useState(0);
-
+export function PixelCharacter() {
   useEffect(() => {
-    const timer = setInterval(() => {
-      setFrame((f) => (f + 1) % 4);
-    }, 400);
-    return () => clearInterval(timer);
+    if (document.getElementById("live2d-widget-init")) return;
+    const marker = document.createElement("meta");
+    marker.id = "live2d-widget-init";
+    document.head.appendChild(marker);
+
+    const live2d_path = "/live2d/";
+
+    // 加载资源
+    function loadResource(url: string, type: "css" | "js"): Promise<void> {
+      return new Promise((resolve, reject) => {
+        if (type === "css") {
+          const link = document.createElement("link");
+          link.rel = "stylesheet";
+          link.href = url;
+          link.onload = () => resolve();
+          link.onerror = () => reject();
+          document.head.appendChild(link);
+        } else {
+          const script = document.createElement("script");
+          script.src = url;
+          script.onload = () => resolve();
+          script.onerror = () => reject();
+          document.head.appendChild(script);
+        }
+      });
+    }
+
+    // 不限制屏幕宽度，全部加载
+    Promise.all([
+      loadResource(live2d_path + "waifu.css", "css"),
+      loadResource(live2d_path + "live2d.min.js", "js"),
+      loadResource(live2d_path + "waifu-tips.js", "js"),
+    ]).then(() => {
+      // @ts-ignore
+      if (typeof initWidget === "function") {
+        // @ts-ignore
+        initWidget({
+          waifuPath: live2d_path + "waifu-tips.json",
+          cdnPath: "https://fastly.jsdelivr.net/gh/fghrsh/live2d_api/",
+          tools: ["hitokoto", "asteroids", "switch-model", "switch-texture", "photo", "info", "quit"],
+        });
+      }
+      // 注入拖拽
+      waitAndInjectDrag();
+    }).catch((err) => {
+      console.error("Live2D 加载失败:", err);
+    });
+
+    function waitAndInjectDrag() {
+      const check = setInterval(() => {
+        const el = document.getElementById("waifu");
+        const canvas = document.getElementById("live2d");
+        if (el && canvas) {
+          clearInterval(check);
+          setTimeout(() => setupDrag(el, canvas), 800);
+        }
+      }, 300);
+      setTimeout(() => clearInterval(check), 30000);
+    }
+
+    function setupDrag(element: HTMLElement, canvas: HTMLElement) {
+      const initLeft = window.innerWidth - element.offsetWidth - 10;
+      const initTop = window.innerHeight - element.offsetHeight;
+      element.style.cssText += "; left: " + initLeft + "px !important; top: " + initTop + "px !important; right: auto !important; bottom: auto !important; position: fixed !important;";
+
+      let winW = window.innerWidth;
+      let winH = window.innerHeight;
+
+      element.addEventListener("mousedown", (e: MouseEvent) => {
+        if (e.button !== 0) return;
+        if (e.target !== canvas) return;
+        e.preventDefault();
+        e.stopPropagation();
+
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const elRect = element.getBoundingClientRect();
+        const startLeft = elRect.left;
+        const startTop = elRect.top;
+
+        const onMove = (ev: MouseEvent) => {
+          let left = startLeft + (ev.clientX - startX);
+          let top = startTop + (ev.clientY - startY);
+          left = Math.max(0, Math.min(left, winW - element.offsetWidth));
+          top = Math.max(0, Math.min(top, winH - element.offsetHeight));
+          element.style.cssText += "; left: " + left + "px !important; top: " + top + "px !important; right: auto !important; bottom: auto !important;";
+        };
+        const onUp = () => {
+          document.removeEventListener("mousemove", onMove);
+          document.removeEventListener("mouseup", onUp);
+        };
+        document.addEventListener("mousemove", onMove);
+        document.addEventListener("mouseup", onUp);
+      });
+
+      // 触摸拖拽
+      element.addEventListener("touchstart", (e: TouchEvent) => {
+        const target = e.target as HTMLElement;
+        if (target.id !== "live2d") return;
+        const touch = e.touches[0];
+        const startX = touch.clientX;
+        const startY = touch.clientY;
+        const elRect = element.getBoundingClientRect();
+        const startLeft = elRect.left;
+        const startTop = elRect.top;
+
+        const onMove = (ev: TouchEvent) => {
+          const t = ev.touches[0];
+          let left = startLeft + (t.clientX - startX);
+          let top = startTop + (t.clientY - startY);
+          left = Math.max(0, Math.min(left, winW - element.offsetWidth));
+          top = Math.max(0, Math.min(top, winH - element.offsetHeight));
+          element.style.cssText += "; left: " + left + "px !important; top: " + top + "px !important; right: auto !important; bottom: auto !important;";
+        };
+        const onEnd = () => {
+          document.removeEventListener("touchmove", onMove as any);
+          document.removeEventListener("touchend", onEnd);
+        };
+        document.addEventListener("touchmove", onMove as any);
+        document.addEventListener("touchend", onEnd);
+      });
+
+      window.addEventListener("resize", () => { winW = window.innerWidth; winH = window.innerHeight; });
+    }
   }, []);
 
-  // 像素小人的不同帧（走路动画）
-  const frames = [
-    // Frame 0: 站立
-    `
-      ██████
-      █░░░░█
-      █●░●░█
-      █░░░░█
-      █░▬▬░█
-      ██████
-       ████
-      ██████
-      █░░░░█
-      █░░░░█
-      ██████
-       █  █
-       █  █
-      ██  ██
-    `,
-    // Frame 1: 左脚
-    `
-      ██████
-      █░░░░█
-      █●░●░█
-      █░░░░█
-      █░▬▬░█
-      ██████
-       ████
-      ██████
-      █░░░░█
-      █░░░░█
-      ██████
-      ██  █
-       █  █
-      ██  ██
-    `,
-    // Frame 2: 站立（微抬）
-    `
-      ██████
-      █░░░░█
-      █●░●░█
-      █░░░░█
-      █░▬▬░█
-      ██████
-       ████
-      ██████
-      █░░░░█
-      █░░░░█
-      ██████
-       █  █
-       █  █
-      ██  ██
-    `,
-    // Frame 3: 右脚
-    `
-      ██████
-      █░░░░█
-      █●░●░█
-      █░░░░█
-      █░▬▬░█
-      ██████
-       ████
-      ██████
-      █░░░░█
-      █░░░░█
-      ██████
-       █  ██
-       █  █
-      ██  ██
-    `,
-  ];
-
   return (
-    <div className={`pixel-character ${className}`}>
-      <svg viewBox="0 0 16 24" width="48" height="72" className="crisp-edges">
-        {/* Head */}
-        <rect x="4" y="0" width="8" height="8" fill="var(--purple)" opacity="0.9" />
-        {/* Eyes */}
-        <rect x="5" y="2" width="2" height="2" fill="var(--text-primary)" />
-        <rect x="9" y="2" width="2" height="2" fill="var(--text-primary)" />
-        {/* Mouth */}
-        <rect x="6" y="5" width="4" height="1" fill="var(--accent)" />
-        {/* Body */}
-        <rect x="3" y="8" width="10" height="8" fill="var(--blue)" opacity="0.9" />
-        {/* Arms */}
-        <rect
-          x={frame === 1 ? "1" : "2"}
-          y="9"
-          width="2"
-          height="5"
-          fill="var(--purple)"
-          opacity="0.7"
-        />
-        <rect
-          x={frame === 3 ? "13" : "12"}
-          y="9"
-          width="2"
-          height="5"
-          fill="var(--purple)"
-          opacity="0.7"
-        />
-        {/* Legs */}
-        <rect
-          x="5"
-          y="16"
-          width="3"
-          height={frame === 1 ? "7" : "8"}
-          fill="var(--green)"
-          opacity="0.8"
-        />
-        <rect
-          x="9"
-          y="16"
-          width="3"
-          height={frame === 3 ? "7" : "8"}
-          fill="var(--green)"
-          opacity="0.8"
-        />
-        {/* Shoes */}
-        <rect x="4" y={frame === 1 ? "22" : "23"} width="4" height="1" fill="var(--orange)" />
-        <rect x="9" y={frame === 3 ? "22" : "23"} width="4" height="1" fill="var(--orange)" />
-      </svg>
-      <style jsx>{`
-        .pixel-character svg {
-          image-rendering: pixelated;
-          image-rendering: crisp-edges;
-        }
-        .pixel-character {
-          animation: pixel-bounce 1.6s ease-in-out infinite;
-        }
-        @keyframes pixel-bounce {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-3px); }
-        }
-      `}</style>
-    </div>
+    <style>{
+      `#waifu {
+        z-index: 9999 !important;
+        pointer-events: auto !important;
+        cursor: grab !important;
+        transition: none !important;
+        display: block !important;
+      }
+      #waifu:active { cursor: grabbing !important; }
+      #waifu-tips {
+        background: rgba(20, 20, 35, 0.9) !important;
+        border: 1px solid rgba(255,255,255,0.12) !important;
+        border-radius: 12px !important;
+        color: #f0f2f5 !important;
+        font-size: 13px !important;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.3) !important;
+      }
+      #waifu-tool { opacity: 0.6; }
+      #waifu-tool:hover { opacity: 1; }
+      `
+    }</style>
   );
 }
